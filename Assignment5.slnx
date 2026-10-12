@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="AssigmnetIFP/AssigmnetIFP.csproj" />
+  <Project Path="Assignment1FP.Tests/Assignment1FP.Tests.csproj" />
+</Solution>

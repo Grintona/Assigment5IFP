@@ -1,0 +1,9 @@
+{ "numFound": 7, "start": 0, "docs": [
+  { "title": "Old Book",      "author_name": ["Author A"], "first_publish_year": 1999, "edition_count": 5,  "key": "/old",      "language": ["eng"] },
+  { "title": "Boundary Book", "author_name": ["Author D"], "first_publish_year": 2000, "edition_count": 10, "key": "/boundary", "language": ["eng"] },
+  { "title": "Popular Book",  "author_name": ["Author B"], "first_publish_year": 2010, "edition_count": 20, "key": "/popular",  "language": ["eng"] },
+  { "title": "Mid Book",      "author_name": ["Author F"], "first_publish_year": 2015, "edition_count": 8,  "key": "/mid",      "language": ["eng"] },
+  { "title": "Recent Book",   "author_name": ["Author C"], "first_publish_year": 2022, "edition_count": 2,  "key": "/recent",   "language": ["eng"] },
+  { "title": "Unknown Year",  "author_name": ["Author E"], "edition_count": 7, "key": "/unknown", "language": ["eng"] },
+  { "title": "",              "first_publish_year": 2020, "edition_count": 3, "key": "/notitle" }
+]}
