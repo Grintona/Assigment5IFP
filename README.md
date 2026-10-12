@@ -6,9 +6,10 @@
 
 | Name | Group | Implemented logic | Tests | Documentation |
 |---|---|---|---|---|
-| **<Gulyayev Mikhail** | **IT-2512** | All of it: models, input validation, pipeline stages, policies, console interface | All automated tests | This README |
+| **Gulyayev Mikhail** | **IT-2512** | All of it: models, input validation, pipeline stages, policies, console interface | All automated tests | This README |
 
 Individual work (team of 1).
+https://github.com/Grintona/Assigment5IFP
 
 ## 1. Topic and workflow
 
