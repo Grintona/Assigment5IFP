@@ -1,4 +1,4 @@
-# Study Resource Finder — Assignment 5 (Composing Functions Using Pipelining)
+# Study Resource Finder — Assignments 5 and 6
 
 
 
@@ -173,7 +173,7 @@ Framework: xUnit 2.9.3. File: `Assignment1FP.Tests/UnitTest1.cs`.
 
 7 test methods, 9 test runs (one theory with 4 cases).
 
-**Latest test outcome:** `<paste the last line of "dotnet test" here, e.g. "Passed! - Failed: 0, Passed: 9, Skipped: 0, Total: 9">`
+**Latest Assignment 5 test outcome:** `Passed: 10, Failed: 0, Skipped: 0, Total: 10`
 
 ## 8. Build, run and test
 
@@ -237,6 +237,74 @@ Loaded 7 records: 6 valid, 1 rejected.
 ## 10. Contribution
 
 **Gulyayev Mikhail, It-2512:** designed the workflow and dataset, implemented the models, parser/validation, the three pipeline stages, both policies, the console interface and the API/file loading, wrote all automated tests and this documentation.
+
+## 11. Assignment 6 — Handling Temporal Coupling
+
+### Hidden dependency: unsafe before example
+
+The old pipeline API made the prerequisite easy to miss:
+
+```csharp
+// Unsafe: raw values are accepted and the caller must remember the valid order.
+var result = BookPipeline.FindResources(books, minimumYear, Policies.Recency);
+```
+
+If `minimumYear` is negative, or if a caller sends a null scoring policy, the operation is invalid only after the call begins. A caller could also call the stages in the wrong order, or run a completed workflow again, because no state represented those facts. The safe console path now creates a validated request first and transitions an explicit `Pending` state exactly once.
+
+### Validated factory
+
+`Models/ValidatedSearch.cs` contains `ValidatedSearch.Create`. Its constructor is private, so external callers cannot create a validated request without the factory. The factory checks that:
+
+1. The book collection exists and contains no null records.
+2. Every materialized book has a non-empty title and key, a non-negative edition count, and either an unknown or non-negative publication year.
+3. The minimum publication year is non-negative.
+4. A scoring policy exists.
+
+It returns `ValidationResult<ValidatedSearch>.Valid` with an immutable book collection, or `ValidationResult<ValidatedSearch>.Invalid` with every reason. No partially constructed valid request escapes.
+
+### Explicit cases and safe transitions
+
+`Models/ValidationResult.cs` is a closed record hierarchy with `Valid(Value)` and `Invalid(Reasons)`. `Services/BookWorkflow.cs` defines the mutually exclusive workflow states:
+
+- `Pending(ValidatedSearch)` means prerequisites were satisfied and the search may run.
+- `Completed(Recommendations)` carries the result and cannot be completed again.
+- `Rejected(Reason)` records a failed prerequisite or invalid sequence.
+
+`BookWorkflow.Transition` uses an exhaustive switch expression. `Pending` produces a new `Completed` state, `Completed` rejects repeated operations, and `Rejected` remains unsuccessful. The console calls `ValidatedSearch.Create`, pattern-matches its result, then passes only the valid value into `Pending`.
+
+### Demonstrations
+
+- Success: load `Data/books.json`, enter minimum year `2000`, choose policy `1` or `2`.
+- Invalid factory input: `ValidatedSearch.Create(books, -1, Policies.Popularity)` returns `Invalid` with `Minimum year cannot be negative.`
+- Missing prerequisite: transitioning `Rejected("missing validation")` returns `Invalid` and cannot produce recommendations.
+- Repeated operation: transitioning a `Completed` state returns `Invalid` with `The search has already been completed.`
+- Boundary: year `2000` remains included; year `1999` is excluded.
+
+The legacy three-stage functions remain pure and are covered by the Assignment 5 tests, but the active console workflow is `ValidatedSearch.Create` -> `Pending` -> `BookWorkflow.Transition` -> `Completed`.
+
+### Assignment 6 requirement map
+
+| Requirement | Implementation and tests |
+|---|---|
+| Unsafe before example | This section; active console path no longer uses raw workflow calls |
+| Validated factory | `Models/ValidatedSearch.cs`, `ValidatedSearchFactory_AcceptsValidInput`, rejection tests |
+| Restricted construction | Private `ValidatedSearch` constructor and immutable properties |
+| Distinct cases | `Models/ValidationResult.cs`, `Services/BookWorkflow.cs`, `WorkflowCases_AreReachableAndPatternMatched` |
+| Pattern matching in application path | `Program.cs` and `BookWorkflow.Transition` |
+| Missing prerequisite | `FailedTransition_PreservesOriginalState` and rejected-state branch |
+| Repeated operation | `RepeatedWorkflowOperation_IsRejected` |
+| Boundary and normal operation | `BoundaryYear_IsIncluded_AndOneYearEarlierIsExcluded`, `NormalWorkflow_ProducesDocumentedResult` |
+| State preservation | `FailedTransition_PreservesOriginalState`, `Stages_DoNotModifyCallerData` |
+
+### Assignment 6 tests
+
+The project now has 17 passing automated test cases. In addition to the earlier pipeline tests, the new tests cover factory success, invalid book values, negative-year rejection, missing books and policy, every declared state case, missing prerequisite, repeated operation, and preservation of the original pending state.
+
+```bash
+dotnet test Assignment1FP.Tests/Assignment1FP.Tests.csproj
+```
+
+Latest result: `Passed: 17, Failed: 0, Skipped: 0, Total: 17`.
 
 =============================================================================================================================
 

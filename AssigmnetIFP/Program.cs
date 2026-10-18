@@ -115,16 +115,50 @@ Console.WriteLine("==============================");
 switch (policyChoice)
 {
     case "1":
-        PrintBooks.Print("Popularity", BookPipeline.FindResources(books, minYear, Policies.Popularity));
+        RunWorkflow(books, minYear, Policies.Popularity, "Popularity");
         break;
     case "2":
-        PrintBooks.Print("Recency", BookPipeline.FindResources(books, minYear, Policies.Recency));
+        RunWorkflow(books, minYear, Policies.Recency, "Recency");
         break;
     case "3":
-        PrintBooks.Print("Popularity", BookPipeline.FindResources(books, minYear, Policies.Popularity));
-        PrintBooks.Print("Recency", BookPipeline.FindResources(books, minYear, Policies.Recency));
+        RunWorkflow(books, minYear, Policies.Popularity, "Popularity");
+        RunWorkflow(books, minYear, Policies.Recency, "Recency");
         break;
     default:
         Console.WriteLine("Invalid choice. Exiting...");
         break;
+}
+
+static void RunWorkflow(
+    IEnumerable<Book> books,
+    int minimumYear,
+    Func<Book, double> scoringPolicy,
+    string policyName)
+{
+    var creation = ValidatedSearch.Create(books, minimumYear, scoringPolicy);
+
+    switch (creation)
+    {
+        case ValidationResult<ValidatedSearch>.Invalid invalid:
+            Console.WriteLine($"Cannot start workflow: {string.Join("; ", invalid.Reasons)}");
+            return;
+        case ValidationResult<ValidatedSearch>.Valid valid:
+            var transition = BookWorkflow.Transition(new BookWorkflowState.Pending(valid.Value));
+            switch (transition)
+            {
+                case ValidationResult<BookWorkflowState>.Invalid rejected:
+                    Console.WriteLine($"Workflow rejected: {string.Join("; ", rejected.Reasons)}");
+                    return;
+                case ValidationResult<BookWorkflowState>.Valid completed
+                    when completed.Value is BookWorkflowState.Completed result:
+                    PrintBooks.Print(policyName, result.Recommendations);
+                    return;
+                default:
+                    Console.WriteLine("Workflow returned an unexpected state.");
+                    return;
+            }
+        default:
+            Console.WriteLine("Validation returned an unexpected case.");
+            return;
+    }
 }

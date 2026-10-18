@@ -31,4 +31,10 @@ public static class BookPipeline
     public static IReadOnlyList<Recommendation> FindResources(
         IEnumerable<Book> books, int minimumYear, Func<Book, double> scoringPolicy)
         => RankBooks(ScoreBooks(FilterBooks(books, minimumYear), scoringPolicy));
+
+    public static IReadOnlyList<Recommendation> FindResources(ValidatedSearch search)
+    {
+        ArgumentNullException.ThrowIfNull(search);
+        return FindResources(search.Books, search.MinimumYear, search.ScoringPolicy);
+    }
 }
