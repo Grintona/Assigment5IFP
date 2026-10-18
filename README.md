@@ -237,3 +237,51 @@ Loaded 7 records: 6 valid, 1 rejected.
 ## 10. Contribution
 
 **Gulyayev Mikhail, It-2512:** designed the workflow and dataset, implemented the models, parser/validation, the three pipeline stages, both policies, the console interface and the API/file loading, wrote all automated tests and this documentation.
+
+=============================================================================================================================
+
+## Assignment 6 — Task 1: Identify the Hidden Dependency
+
+### Operation
+
+The operation is processing books through `BookPipeline.FindResources()`, which filters, scores, and ranks books.
+
+### Unsafe example
+
+
+var book = new Book(
+    "",
+    ImmutableArray<string>.Empty,
+    2020,
+    -5,
+    "",
+    ImmutableArray<string>.Empty);
+
+var result = BookPipeline.FindResources(
+    new[] { book },
+    2000,
+    Policies.Popularity);
+
+
+### Hidden prerequisite
+
+The application should validate a book before using it in the workflow. The existing validation logic is implemented in `BookParser.TryParseBook()`.
+
+However, the `Book` record has a publicly accessible constructor. A caller can create a `Book` directly and bypass the parser.
+
+### Required order
+
+The intended order is:
+
+1. Receive raw book data.
+2. Validate the data.
+3. Create a validated book value.
+4. Pass the validated value to the processing pipeline.
+5. Produce the recommendations.
+
+### What goes wrong
+
+If a caller skips validation, a book with an empty title, an empty key, or a negative edition count can enter the pipeline. The pipeline does not enforce all the validation rules defined by the parser.
+
+This can lead to invalid domain data being processed and included in the recommendation workflow.
+
