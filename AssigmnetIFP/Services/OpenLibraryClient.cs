@@ -34,6 +34,45 @@ public static async Task<List<BookDto>> LoadFromFile(string path)
         ?? throw new InvalidOperationException("File has no 'docs' field.");
 }
 
+    public static async Task<Result<IReadOnlyList<BookDto>, DomainError>> LoadFromFileResult(string path)
+    {
+        try
+        {
+            var books = await LoadFromFile(path);
+            return Result<IReadOnlyList<BookDto>, DomainError>.Ok(books);
+        }
+        catch (FileNotFoundException)
+        {
+            return Result<IReadOnlyList<BookDto>, DomainError>.Fail(
+                new("FileNotFound", $"The data file was not found: '{path}'."));
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return Result<IReadOnlyList<BookDto>, DomainError>.Fail(
+                new("DirectoryNotFound", $"The data directory was not found for '{path}'."));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Result<IReadOnlyList<BookDto>, DomainError>.Fail(
+                new("FileAccessDenied", $"Access to the data file was denied: '{path}'."));
+        }
+        catch (JsonException ex)
+        {
+            return Result<IReadOnlyList<BookDto>, DomainError>.Fail(
+                new("MalformedJson", $"The data file contains malformed JSON: {ex.Message}"));
+        }
+        catch (IOException ex)
+        {
+            return Result<IReadOnlyList<BookDto>, DomainError>.Fail(
+                new("FileReadFailed", $"Could not read '{path}': {ex.Message}"));
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result<IReadOnlyList<BookDto>, DomainError>.Fail(
+                new("InvalidDataFile", $"The data file is invalid: {ex.Message}"));
+        }
+    }
+
     public async Task<List<BookDto>> SearchBooksAsync(string query){
         string json = await SearchAsync(query);
         var response = JsonSerializer.Deserialize<OpenLibraryResponse>(json);

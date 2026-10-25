@@ -1,4 +1,4 @@
-# Study Resource Finder — Assignments 5 and 6
+# Study Resource Finder — Assignments 5, 6 and 7
 
 
 
@@ -14,6 +14,42 @@ https://github.com/Grintona/Assigment5IFP
 ## 1. Topic and workflow
 
 **Topic:** Study Resource Finder, a console tool that recommends books for studying a topic.
+
+## Assignment 7: explicit outcomes and exception boundaries
+
+The Assignment 7 implementation keeps the existing pure pipeline and adds an explicit
+`Result<T, E>` in `AssigmnetIFP/Models/Result.cs`. `Success` always contains its value and
+`Failure` always contains a `DomainError`; there is no success case with a missing payload.
+`Map` transforms a success, while `Bind` continues only after a success. Both propagate a
+failure without invoking the supplied function.
+
+The integrated chain is `BookPipeline.FindResourcesResult`: it validates the search, filters
+books, calls the Result-returning `ScoreBooksResult` through `Bind`, and maps the scored list
+to ranked recommendations. `ScoreBooksResult` rejects a policy that throws the expected
+scoring exception or produces `NaN`/infinite output, so this `Bind` is a real continuation
+that can fail rather than an `Ok(...)` wrapper around a total operation. Its expected domain
+failures are:
+
+| Code | Meaning |
+|---|---|
+| `MissingBooks` | no input collection was supplied |
+| `InvalidMinimumYear` | the requested year is negative |
+| `MissingPolicy` | no scoring policy was supplied |
+| `ScoringRejected` | the selected policy cannot calculate a book score |
+| `InvalidScore` | the selected policy returned `NaN` or infinity |
+| `BookNotFound` | a lookup key has no matching book |
+| `InvalidWorkflowState` | a completed or rejected workflow cannot run again |
+
+`BookPipeline.FindByKey` is the explicit present/absent lookup. A missing book is a
+`BookNotFound` failure; a real `EditionCount` of `0` remains a successful present value.
+Validation errors describe invalid domain input, while workflow errors describe an operation
+that is not allowed in the current state.
+
+`OpenLibraryClient.LoadFromFileResult` is the operational boundary. It converts missing files,
+malformed JSON, access errors, and invalid response shape into `DomainError` values. The file is
+fully deserialized before any records are returned, so malformed content cannot partially update
+the valid book collection. `Program.cs` handles the final Result case and displays the code and
+message to the user.
 
 **Intended users:** students who search for books on a subject and want only reasonably recent books, ordered either by popularity or by recency.
 
@@ -153,7 +189,7 @@ RankBooks(ScoreBooks(FilterBooks(books, minimumYear), scoringPolicy));
 | Two policies | `Services/Policies.cs`: `Popularity`, `Recency` |
 | Policy chosen outside the pipeline | `Program.cs` (`switch (policyChoice)`) |
 | Purity: I/O after computing | `Program.cs`, `Services/OpenLibraryClient.cs`, `Services/PrintBooks.cs` |
-| Data source choice (API or file) | `Program.cs` menu, `OpenLibraryClient.SearchBooksAsync`, `OpenLibraryClient.LoadFromFile` |
+| Data source choice (API or file) | `Program.cs` menu, `OpenLibraryClient.SearchBooksAsync`, `OpenLibraryClient.LoadFromFileResult` |
 | Sample dataset | `Data/books.json` |
 | Automated tests | `Assignment1FP.Tests/UnitTest1.cs` (class `PipelineTests`) |
 
@@ -171,9 +207,10 @@ Framework: xUnit 2.9.3. File: `Assignment1FP.Tests/UnitTest1.cs`.
 | Two policies | `TwoPolicies_DifferOnSameInput` | Popularity: Popular, Boundary, Mid, Recent; Recency: Recent, Mid, Popular, Boundary |
 | Purity and stages | `Stages_DoNotModifyCallerData` | each stage separately; input list, stage results and authors arrays remain unchanged |
 
-7 test methods, 9 test runs (one theory with 4 cases).
+27 automated tests, including Result composition, three domain failures, present and absent
+lookup, skipped Map/Bind functions, missing file, malformed JSON, and workflow state failures.
 
-**Latest Assignment 5 test outcome:** `Passed: 10, Failed: 0, Skipped: 0, Total: 10`
+**Latest Assignment 7 test outcome:** `Passed: 27, Failed: 0, Skipped: 0, Total: 27`
 
 ## 8. Build, run and test
 
@@ -352,4 +389,147 @@ The intended order is:
 If a caller skips validation, a book with an empty title, an empty key, or a negative edition count can enter the pipeline. The pipeline does not enforce all the validation rules defined by the parser.
 
 This can lead to invalid domain data being processed and included in the recommendation workflow.
+
+=============================================================================================================================
+
+# Assignment 7 — Exception Handling in Functional Programming
+
+## Purpose
+
+Assignment 7 adds explicit domain outcomes, missing-value handling, `Map` and `Bind`
+composition, and exception handling at the file/API boundary. Expected business failures are
+represented as values instead of being implemented with throw/catch logic.
+
+## Result type
+
+`AssigmnetIFP/Models/Result.cs` defines the following closed result type:
+
+- `Result<T, E>.Success(T Value)` contains a successful value.
+- `Result<T, E>.Failure(E Error)` contains an error and no success value.
+- `Map` transforms the value only for `Success`.
+- `Bind` continues with a function returning another `Result` only for `Success`.
+
+`Map` and `Bind` propagate an existing failure and do not call their supplied functions after
+an error. This prevents invalid or missing values from being passed to later workflow stages.
+
+## Domain errors
+
+`AssigmnetIFP/Models/DomainError.cs` stores an error code and a useful message. The application
+uses these expected domain failures:
+
+| Error code | Meaning |
+|---|---|
+| `MissingBooks` | The input collection is missing. |
+| `InvalidMinimumYear` | The requested minimum publication year is negative. |
+| `MissingPolicy` | No scoring policy was supplied. |
+| `BookNotFound` | A lookup key does not match any book. |
+| `ScoringRejected` | The selected scoring policy cannot calculate a score. |
+| `InvalidScore` | A scoring policy returned `NaN` or infinity. |
+| `InvalidWorkflowState` | The requested workflow operation is not allowed in the current state. |
+
+The parser also returns structured errors for missing title, key, edition count, and invalid
+publication data. A valid edition count of `0` is preserved as data and is not treated as a
+missing value.
+
+## Result pipeline and Bind
+
+`Services/BookPipeline.cs` contains the integrated workflow:
+
+```csharp
+ValidatedSearch.CreateResult(books, minimumYear, scoringPolicy)
+  .Bind(search => FilterBooksResult(search))
+  .Bind(filtered => ScoreBooksResult(filtered, scoringPolicy!))
+  .Map(RankBooks);
+```
+
+The first `Bind` continues only after search validation succeeds. The second `Bind` uses the
+real fallible operation `ScoreBooksResult`. It returns `Failure` when the scoring policy throws
+the expected `InvalidOperationException`, returns `NaN`, or returns infinity. Therefore this
+`Bind` is not an artificial `Ok(...)` wrapper: it can reject the request and preserve the error
+through the rest of the chain. When scoring fails, `RankBooks` is not called.
+
+`Map(RankBooks)` is used for the final pure transformation from scored books to ranked
+recommendations. The final `Result` is handled at the application boundary in `Program.cs`.
+
+## Missing-value lookup
+
+`BookPipeline.FindByKey` is an explicit lookup operation:
+
+- a matching book returns `Result.Success<Book, DomainError>`;
+- an absent key returns `Result.Failure<Book, DomainError>` with `BookNotFound`;
+- an empty lookup key returns `MissingLookupKey`;
+- a book with `EditionCount = 0` is still a present and valid book.
+
+No fabricated book or `default(Book)` value is used to represent absence.
+
+## Operational exception boundary
+
+`OpenLibraryClient.LoadFromFileResult` is the boundary for JSON file operations. It catches and
+converts the following operational problems into clear failures:
+
+- missing file or directory;
+- access denied;
+- malformed JSON;
+- invalid response structure;
+- other file read errors.
+
+The file is deserialized completely before the result is returned. Consequently, malformed
+input cannot partially update the valid book collection. Operational failures are distinct from
+domain failures: a malformed file is an input/environment problem, while an invalid year or an
+unavailable score is a business-rule problem.
+
+## Demonstrations
+
+Run the application from the repository root:
+
+```bash
+dotnet run --project AssigmnetIFP
+```
+
+The following cases are required and implemented:
+
+1. Complete success: load `Data/books.json`, enter year `2000`, and choose policy `1`.
+2. Domain failure: enter a negative year or use an invalid scoring policy.
+3. Present lookup: look up `/boundary`.
+4. Missing lookup: look up `/does-not-exist` and receive `BookNotFound`.
+5. Missing file: provide a path that does not exist and receive `FileNotFound`.
+6. Malformed file: provide a JSON file with invalid JSON and receive `MalformedJson`.
+7. Empty result: enter year `3000`; the workflow completes with no recommendations.
+
+## Assignment 7 requirement map
+
+| Requirement | Implementation |
+|---|---|
+| Explicit success and failure outcomes | `Models/Result.cs` |
+| Useful structured errors | `Models/DomainError.cs` |
+| Three or more domain failures | `ValidatedSearch.CreateResult`, `FindByKey`, `ScoreBooksResult`, `BookWorkflow.TransitionResult` |
+| Explicit missing-value lookup | `BookPipeline.FindByKey` |
+| `Map` transformation | `BookPipeline.FindResourcesResult` maps with `RankBooks` |
+| Fallible `Bind` continuation | `BookPipeline.ScoreBooksResult` |
+| Failure propagation and skipped functions | `Result_FailureSkipsMapAndBind`, `ResultChain_RejectsUnusableScoreAndSkipsRanking` |
+| Missing and malformed file handling | `OpenLibraryClient.LoadFromFileResult` |
+| Final boundary handling | `Program.cs` |
+| Automated tests | `Assignment1FP.Tests/UnitTest1.cs` |
+
+## Assignment 7 tests
+
+The test project contains 28 passing tests. The Assignment 7 tests cover complete success,
+three domain failures, present and absent lookup, legitimate zero values, successful `Map`,
+successful `Bind`, failure propagation, skipped dependent functions, workflow-state rejection,
+missing files, malformed JSON, and preservation of consistent state.
+
+Run the tests with:
+
+```bash
+dotnet test Assignment1FP.Tests/Assignment1FP.Tests.csproj
+```
+
+Latest result: `Passed: 28, Failed: 0, Skipped: 0, Total: 28`.
+
+## Assignment 7 contribution
+
+**Gulyayev Mikhail, IT-2512:** implemented the `Result` and `DomainError` models, integrated
+`Map` and fallible `Bind` into the book workflow, added explicit lookup outcomes, converted
+file and JSON exceptions into boundary failures, wrote the Assignment 7 tests, and documented
+the implementation and demonstrations.
 

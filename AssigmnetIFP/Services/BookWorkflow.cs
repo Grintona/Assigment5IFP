@@ -16,6 +16,25 @@ public abstract record BookWorkflowState
 
 public static class BookWorkflow
 {
+    public static Result<BookWorkflowState, DomainError> TransitionResult(BookWorkflowState? state)
+    {
+        if (state is null)
+            return Result<BookWorkflowState, DomainError>.Fail(
+                new("MissingWorkflowState", "A workflow state is required."));
+
+        return state switch
+        {
+            BookWorkflowState.Pending pending => Result<BookWorkflowState, DomainError>.Ok(
+                new BookWorkflowState.Completed(BookPipeline.FindResources(pending.Search))),
+            BookWorkflowState.Completed => Result<BookWorkflowState, DomainError>.Fail(
+                new("InvalidWorkflowState", "The search has already been completed.")),
+            BookWorkflowState.Rejected rejected => Result<BookWorkflowState, DomainError>.Fail(
+                new("InvalidWorkflowState", $"The workflow was rejected: {rejected.Reason}")),
+            _ => Result<BookWorkflowState, DomainError>.Fail(
+                new("InvalidWorkflowState", "Unknown workflow state."))
+        };
+    }
+
     public static ValidationResult<BookWorkflowState> Transition(BookWorkflowState state)
     {
         ArgumentNullException.ThrowIfNull(state);

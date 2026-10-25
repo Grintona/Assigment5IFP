@@ -2,6 +2,7 @@
 using StudyResourceFinder.Models;
 using StudyResourceFinder.Services;
 using Xunit;
+using System.IO;
 
 namespace StudyResourceFinder.Tests;
 
@@ -226,5 +227,146 @@ public class PipelineTests
         Assert.IsType<ValidationResult<BookWorkflowState>.Invalid>(failed);
         Assert.Equal(creation.Value, pending.Search);
         Assert.Equal(2000, pending.Search.MinimumYear);
+    }
+
+    [Fact]
+    public void Result_MapTransformsSuccess()
+    {
+        var result = Result<int, DomainError>.Ok(4).Map(value => value * 2);
+
+        var success = Assert.IsType<Result<int, DomainError>.Success>(result);
+        Assert.Equal(8, success.Value);
+    }
+
+    [Fact]
+    public void Result_BindContinuesWithResultOperation()
+    {
+        var result = Result<int, DomainError>.Ok(4)
+            .Bind(value => Result<string, DomainError>.Ok($"book-{value}"));
+
+        Assert.Equal("book-4", Assert.IsType<Result<string, DomainError>.Success>(result).Value);
+    }
+
+    [Fact]
+    public void Result_FailureSkipsMapAndBind()
+    {
+        var calls = 0;
+        var failure = Result<int, DomainError>.Fail(new("Invalid", "invalid value"));
+
+        var mapped = failure.Map(value => { calls++; return value + 1; });
+        var bound = failure.Bind(value =>
+        {
+            calls++;
+            return Result<string, DomainError>.Ok(value.ToString());
+        });
+
+        Assert.Equal(0, calls);
+        Assert.IsType<Result<int, DomainError>.Failure>(mapped);
+        Assert.IsType<Result<string, DomainError>.Failure>(bound);
+    }
+
+    [Fact]
+    public void ResultChain_ProducesCompleteRecommendation()
+    {
+        var result = BookPipeline.FindResourcesResult(CreateBooks(), 2000, Policies.Popularity);
+
+        var success = Assert.IsType<Result<IReadOnlyList<Recommendation>, DomainError>.Success>(result);
+        Assert.Equal("Popular Book", success.Value[0].Book.Title);
+        Assert.Equal(20, success.Value[0].Score);
+    }
+
+    [Fact]
+    public void ResultChain_ReportsThreeDistinctDomainFailures()
+    {
+        var missingBooks = Assert.IsType<Result<IReadOnlyList<Recommendation>, DomainError>.Failure>(
+            BookPipeline.FindResourcesResult(null, 2000, Policies.Popularity));
+        var invalidYear = Assert.IsType<Result<IReadOnlyList<Recommendation>, DomainError>.Failure>(
+            BookPipeline.FindResourcesResult(CreateBooks(), -1, Policies.Popularity));
+        var missingPolicy = Assert.IsType<Result<IReadOnlyList<Recommendation>, DomainError>.Failure>(
+            BookPipeline.FindResourcesResult(CreateBooks(), 2000, null));
+
+        Assert.Equal("MissingBooks", missingBooks.Error.Code);
+        Assert.Equal("InvalidMinimumYear", invalidYear.Error.Code);
+        Assert.Equal("MissingPolicy", missingPolicy.Error.Code);
+    }
+
+    [Fact]
+    public void ResultChain_RejectsUnusableScoreAndSkipsRanking()
+    {
+        var rankingCalls = 0;
+        var result = ValidatedSearch.CreateResult(CreateBooks(), 2000, _ => double.NaN)
+            .Bind(search => BookPipeline.ScoreBooksResult(
+                BookPipeline.FilterBooks(search.Books, search.MinimumYear), search.ScoringPolicy))
+            .Map(scored =>
+            {
+                rankingCalls++;
+                return BookPipeline.RankBooks(scored);
+            });
+
+        var failure = Assert.IsType<Result<IReadOnlyList<Recommendation>, DomainError>.Failure>(result);
+        Assert.Equal("InvalidScore", failure.Error.Code);
+        Assert.Equal(0, rankingCalls);
+    }
+
+    [Fact]
+    public void Lookup_PresentAndAbsentAreExplicit()
+    {
+        var present = BookPipeline.FindByKey(CreateBooks(), "/boundary");
+        var absent = BookPipeline.FindByKey(CreateBooks(), "/does-not-exist");
+
+        var zero = MakeBook("Zero editions", 2020, 0, "/zero");
+        var zeroResult = BookPipeline.FindByKey(new[] { zero }, "/zero");
+
+        Assert.Equal("Boundary Book", Assert.IsType<Result<Book, DomainError>.Success>(present).Value.Title);
+        Assert.Equal("BookNotFound", Assert.IsType<Result<Book, DomainError>.Failure>(absent).Error.Code);
+        Assert.Equal(0, Assert.IsType<Result<Book, DomainError>.Success>(zeroResult).Value.EditionCount);
+    }
+
+    [Fact]
+    public async Task MissingFile_ReturnsOperationalFailureWithoutStateChange()
+    {
+        var result = await OpenLibraryClient.LoadFromFileResult(Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json"));
+
+        var failure = Assert.IsType<Result<IReadOnlyList<BookDto>, DomainError>.Failure>(result);
+        Assert.Equal("FileNotFound", failure.Error.Code);
+    }
+
+    [Fact]
+    public async Task MalformedFile_ReturnsFailureWithoutPartialUpdate()
+    {
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".json");
+        await File.WriteAllTextAsync(path, "{ invalid json");
+        try
+        {
+            var result = await OpenLibraryClient.LoadFromFileResult(path);
+
+            var failure = Assert.IsType<Result<IReadOnlyList<BookDto>, DomainError>.Failure>(result);
+            Assert.Equal("MalformedJson", failure.Error.Code);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void MissingRequiredDto_ReturnsStructuredFailure()
+    {
+        var result = BookParser.ParseBook(new BookDto { Title = "Book", Key = "/book" });
+
+        var failure = Assert.IsType<Result<Book, DomainError>.Failure>(result);
+        Assert.Equal("MissingEditionCount", failure.Error.Code);
+    }
+
+    [Fact]
+    public void RepeatedWorkflow_ReturnsStateFailureAndKeepsCompletedState()
+    {
+        var completed = new BookWorkflowState.Completed(
+            BookPipeline.FindResources(CreateBooks(), 2000, Policies.Popularity));
+        var result = BookWorkflow.TransitionResult(completed);
+
+        var failure = Assert.IsType<Result<BookWorkflowState, DomainError>.Failure>(result);
+        Assert.Equal("InvalidWorkflowState", failure.Error.Code);
+        Assert.Equal(4, completed.Recommendations.Count);
     }
 }

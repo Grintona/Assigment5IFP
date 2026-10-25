@@ -51,7 +51,7 @@ if (!BookParser.TryParseMinYear(Console.ReadLine(), out int minYear, out string 
     return;
 }
 
-List<BookDto> dtos;
+IReadOnlyList<BookDto> dtos;
 
 try
 {
@@ -64,7 +64,14 @@ try
     else
     {
         Console.WriteLine($"Loading books from file: {sourceInput}");
-        dtos = await OpenLibraryClient.LoadFromFile(sourceInput);
+        var fileResult = await OpenLibraryClient.LoadFromFileResult(sourceInput);
+        if (fileResult is Result<IReadOnlyList<BookDto>, DomainError>.Failure fileFailure)
+        {
+            Console.WriteLine(fileFailure.Error);
+            return;
+        }
+
+        dtos = ((Result<IReadOnlyList<BookDto>, DomainError>.Success)fileResult).Value;
     }
 }
 catch (HttpRequestException ex)
@@ -135,30 +142,13 @@ static void RunWorkflow(
     Func<Book, double> scoringPolicy,
     string policyName)
 {
-    var creation = ValidatedSearch.Create(books, minimumYear, scoringPolicy);
-
-    switch (creation)
+    var result = BookPipeline.FindResourcesResult(books, minimumYear, scoringPolicy);
+    if (result is Result<IReadOnlyList<Recommendation>, DomainError>.Failure failure)
     {
-        case ValidationResult<ValidatedSearch>.Invalid invalid:
-            Console.WriteLine($"Cannot start workflow: {string.Join("; ", invalid.Reasons)}");
-            return;
-        case ValidationResult<ValidatedSearch>.Valid valid:
-            var transition = BookWorkflow.Transition(new BookWorkflowState.Pending(valid.Value));
-            switch (transition)
-            {
-                case ValidationResult<BookWorkflowState>.Invalid rejected:
-                    Console.WriteLine($"Workflow rejected: {string.Join("; ", rejected.Reasons)}");
-                    return;
-                case ValidationResult<BookWorkflowState>.Valid completed
-                    when completed.Value is BookWorkflowState.Completed result:
-                    PrintBooks.Print(policyName, result.Recommendations);
-                    return;
-                default:
-                    Console.WriteLine("Workflow returned an unexpected state.");
-                    return;
-            }
-        default:
-            Console.WriteLine("Validation returned an unexpected case.");
-            return;
+        Console.WriteLine($"Workflow failed: {failure.Error}");
+        return;
     }
+
+    var recommendations = ((Result<IReadOnlyList<Recommendation>, DomainError>.Success)result).Value;
+    PrintBooks.Print(policyName, recommendations);
 }
