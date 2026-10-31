@@ -1,4 +1,4 @@
-# Study Resource Finder — Assignments 5, 6 and 7
+# Study Resource Finder — Assignments 5, 6, 7 and 8
 
 
 
@@ -533,3 +533,311 @@ Latest result: `Passed: 28, Failed: 0, Skipped: 0, Total: 28`.
 file and JSON exceptions into boundary failures, wrote the Assignment 7 tests, and documented
 the implementation and demonstrations.
 
+
+
+# Assignment 8 — Extension Methods, LINQ, and Native Integration
+
+## Overview and Contribution
+
+| Name | Group | Implemented Logic | Tests | Documentation |
+|---|---|---|---|---|
+| **Gulyayev Mikhail** | **IT-2512** | Custom extension methods, two LINQ reports, curried scoring and partial application, deferred execution with `yield return`, safe stream disposal with `await using`, native assembly library integration into live API workflow | 16 new automated tests in `Assignment8Tests.cs` (45 tests total) | This Assignment 8 documentation |
+
+Individual work (team of 1).
+
+---
+
+## Task 1: Custom Extension Methods
+
+Implemented in `AssigmnetIFP/Services/BookExtensions.cs`:
+
+### 1. `GetAge(this Book book, int referenceYear = 2026)`
+- **Receiver Type:** `Book`
+- **Return Type:** `int`
+- **Expected Behaviour:** Computes `Math.Max(0, referenceYear - book.FirstPublishYear.Value)` when `FirstPublishYear` is present; returns `0` if unknown or null. Throws `ArgumentNullException` if the book receiver is null.
+- **Why it belongs on `Book`:** The age of a book is an intrinsic domain property derived directly from its publication year and a reference point in time. Placing this on `Book` enables clean dot-syntax (`book.GetAge(2026)`) when preparing inputs for the native priority calculation.
+
+### 2. `WithMinimumEditions(this IEnumerable<Book> books, int minEditions)`
+- **Receiver Type:** `IEnumerable<Book>`
+- **Return Type:** `IEnumerable<Book>`
+- **Expected Behaviour:** Filters a sequence of books, yielding only items where `EditionCount >= minEditions`. Clamps negative thresholds to `0`. Throws `ArgumentNullException` if the sequence is null.
+- **Why it belongs on `IEnumerable<Book>`:** Filtering collections of domain items is an idiomatic query pipeline operation. Placing this on `IEnumerable<Book>` allows seamless LINQ chaining (`books.WithMinimumEditions(5).Where(...)`) without wrapping the collection in artificial container types.
+
+Both extension methods are called in the application (`Program.cs` and `LinqReports.cs`) and covered by automated tests in `Assignment8Tests.cs`.
+
+---
+
+## Task 2: Two LINQ Reports
+
+Implemented in `AssigmnetIFP/Services/LinqReports.cs`, separated from Console UI and file output. Both operate on live API data (or loaded JSON data).
+
+### Report 1: Author Publishing & Edition Aggregation Report
+- **Purpose:** Analyze author output, collective edition reach, and career span across study resources.
+- **Intended User:** Curriculum planners, researchers, and students identifying the most prolific and widely published authors on a subject.
+- **Input:** `IEnumerable<Book>`, `int minimumYear`, `int minEditions = 0`.
+- **Filters:**
+  1. `WithMinimumEditions(minEditions)`: filters books by edition threshold.
+  2. `Where`: selects books with `FirstPublishYear >= minimumYear` and non-empty author list.
+- **Query Stages & LINQ Operators:**
+  1. `WithMinimumEditions`: custom extension filter stage.
+  2. `Where`: year and author presence filter.
+  3. `SelectMany`: flattens `book.Authors` into `(Author, Book)` pairs so multi-author books contribute to each author.
+  4. `GroupBy(x => x.Author)`: groups records by author name.
+  5. `Select`: computes aggregations:
+     - `BookCount`: `Count()`
+     - `TotalEditions`: `Sum(x => x.Book.EditionCount)`
+     - `EarliestYear`: `Min(x => x.Book.FirstPublishYear!.Value)`
+     - `LatestYear`: `Max(x => x.Book.FirstPublishYear!.Value)`
+  6. `OrderByDescending(r => r.TotalEditions)`: primary ordering by total editions descending.
+  7. `ThenBy(r => r.Author, StringComparer.Ordinal)`: **deterministic tie-breaker** by author name ascending when total editions tie.
+- **Output Fields:** Author Name, Book Count, Total Editions, Active Publication Span (earliest to latest year).
+- **Expected Result:** A deterministically sorted list of `AuthorReportItem` records.
+
+### Report 2: Curried & Native Priority Ranking Report
+- **Purpose:** Provide a multi-faceted book recommendation report combining high-level configurable functional scoring with low-level native assembly priority calculation and decade grouping.
+- **Intended User:** Students wanting custom-scored book recommendations alongside hardware-accelerated system priority scores and chronological distribution.
+- **Input:** `IEnumerable<Book>`, `int minimumYear`, `Func<Book, double> curriedScorer`, `int referenceYear = 2026`.
+- **Filters:** `Where(b => b.FirstPublishYear >= minimumYear)`.
+- **Query Stages & LINQ Operators:**
+  1. `Where`: filters books by publication year.
+  2. `Select`: computes:
+     - `book.GetAge(referenceYear)` via custom extension method.
+     - Real native C/assembly calculation via `NativeAdapter.CalculatePrioritySafe(editions, ratings, age)`.
+     - Configured functional score via `curriedScorer(book)`.
+     - Decade grouping key `(year / 10) * 10`.
+  3. `OrderByDescending(x => x.CurriedScore)`: primary ordering by curried functional score descending.
+  4. `ThenBy(x => x.Book.Title, StringComparer.Ordinal)`: **deterministic tie-breaker** by title ascending when scores tie.
+  5. `Select((x, index) => ...)`: projects into `BookPriorityReportItem` with rank `1..N`.
+  6. Sub-aggregation: `GroupBy(item => item.Decade)` with `Count()` and `Average(item => (double)item.NativePriority)` to produce decade dynamics.
+- **Output Fields:** Rank, Title, Primary Author, Publication Year, Decade, Curried Functional Score, Native Assembly Priority Score, and Decade Aggregates.
+
+---
+
+## Task 3: Configured Functions Through Currying
+
+Implemented in `AssigmnetIFP/Services/CurriedScoring.cs`:
+
+### Curried Function Signature
+```
+CreateScore : ScoringWeights -> (Book -> double)
+```
+
+In C#:
+```csharp
+public static Func<ScoringWeights, Func<Book, double>> CreateScore =>
+    weights => book =>
+    {
+        int age = book.FirstPublishYear.HasValue
+            ? Math.Max(0, weights.ReferenceYear - book.FirstPublishYear.Value)
+            : 50;
+        double recencyFactor = 100.0 / (age + 1.0);
+        return (book.EditionCount * weights.EditionWeight) + (recencyFactor * weights.RecencyWeight);
+    };
+```
+
+### Partial Application
+Two configured functions are created by supplying the `ScoringWeights` configuration up-front:
+
+```csharp
+// Configuration 1: Popularity-Biased (heavily weights edition count)
+public static readonly Func<Book, double> PopularityBiasedScorer =
+    CreateScore(new ScoringWeights(EditionWeight: 1.5, RecencyWeight: 0.2));
+
+// Configuration 2: Recency-Biased (heavily weights recent publication)
+public static readonly Func<Book, double> RecencyBiasedScorer =
+    CreateScore(new ScoringWeights(EditionWeight: 0.1, RecencyWeight: 2.5));
+```
+
+### Contrast on the Same Dataset
+When evaluated on a dataset containing an older classic (e.g. 1950, 100 editions) and a recent modern book (e.g. 2025, 2 editions):
+- `PopularityBiasedScorer` ranks the classic higher (due to 100 editions × 1.5).
+- `RecencyBiasedScorer` ranks the recent book higher (due to high recency factor × 2.5).
+
+Both functions are passed as arguments directly into workflows (`BookPipeline.FindResources` or `LinqReports.GeneratePriorityReport`) without changing any mutable global state.
+
+---
+
+## Task 4: Deferred Execution & Materialization
+
+Implemented in `AssigmnetIFP/Services/DeferredExecution.cs`:
+
+```csharp
+public static IEnumerable<ScoredBook> StreamScoreBooks(
+    IEnumerable<Book> books,
+    Func<Book, double> scoringPolicy)
+{
+    ArgumentNullException.ThrowIfNull(books);
+    ArgumentNullException.ThrowIfNull(scoringPolicy);
+
+    foreach (var book in books)
+    {
+        double score = scoringPolicy(book);
+        yield return new ScoredBook(book, score);
+    }
+}
+```
+
+### Verification with Test Probe Counter
+In `Assignment8Tests.cs` (`DeferredExecution_DemonstratesLazyEvaluationAndSnapshotReuse`):
+1. **Creation:** Calling `StreamScoreBooks(books, probe)` returns an enumerable; the probe counter is strictly `0`. No elements are processed.
+2. **Deferred Iteration:** Calling `MoveNext()` on the enumerator advances evaluation by exactly 1 item; probe counter increments to `1`.
+3. **Materialization Point:** Calling `.ToList()` creates an explicit in-memory snapshot, running the loop for all items in the sequence.
+4. **Predictable Reuse:** Iterating the resulting `List<ScoredBook>` multiple times performs `0` additional evaluations. This prevents unexpected repeated calculations, file reads, or state changes.
+
+---
+
+## Task 5: Safe Resource Disposal
+
+Implemented in `AssigmnetIFP/Services/ReportExporter.cs`:
+
+### Asynchronous File Export with `await using`
+```csharp
+public static async Task<Result<string, DomainError>> ExportReportAsync(string filePath, string content)
+{
+    ...
+    await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
+    await using var writer = new StreamWriter(fileStream, Encoding.UTF8);
+    await writer.WriteAsync(content);
+    return Result<string, DomainError>.Ok(filePath);
+}
+```
+- **Owner:** `ExportReportAsync`.
+- **Release Point:** Exiting the `await using` scope immediately flushes and closes the stream and underlying OS file descriptor on both success and exception paths.
+- **Error Handling:** Catches `UnauthorizedAccessException` and `IOException`, returning explicit `DomainError` failures (`FileAccessDenied`, `FileWriteFailed`).
+
+### Safe Streaming Reader with `using` & `yield`
+```csharp
+public static IEnumerable<string> StreamLines(string filePath)
+{
+    using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+    using var reader = new StreamReader(fileStream, Encoding.UTF8);
+
+    string? line;
+    while ((line = reader.ReadLine()) != null)
+    {
+        yield return line;
+    }
+}
+```
+- In C#, `using` within an iterator method (`yield return`) generates an `IEnumerator` where `Dispose()` disposes the open stream.
+- **Tested in `Assignment8Tests.cs`:** When an enumeration stops early (e.g. `StreamLines(path).Take(1).ToList()`), the file lock is immediately released, allowing subsequent exclusive-mode file access and deletion without `IOException`.
+
+---
+
+## Task 6: Review of Retention and Allocation (Resource Note)
+
+### Materialization Points
+- `BookParser.ParseAll`: materializes parsed DTOs into an `ImmutableArray<Book>`. This provides a stable, immutable dataset for multiple queries and workflow runs.
+- `LinqReports.GenerateAuthorReport` and `GeneratePriorityReport`: call `.ToList()` at the end of their query pipelines to produce stable snapshots for display, ranking, and export.
+- `DeferredExecution.StreamScoreBooks`: produces an `IEnumerable<ScoredBook>` that can be streamed for low memory consumption, or materialized via `.ToList()` when repeated indexing or ranking is required.
+
+### Retained Data & Closures
+- Deferred LINQ queries retain references to their source collections only until materialization occurs.
+- Configured curried scorers capture their `ScoringWeights` in a lightweight closure (2 doubles and 1 integer). They do NOT capture or retain candidate `Book` collections.
+- No static or long-lived caches, mutable collections, or event subscriptions are used. All transient pipeline objects are garbage-collected once the report or workflow finishes.
+
+### Streaming vs Snapshot Trade-off
+- **Streaming (`IEnumerable` with `yield return`):** Minimal memory footprint (`O(1)` space overhead per element) because items are processed one by one. Ideal for large datasets or single-pass processing. Trade-off: re-evaluating the enumerable re-executes calculations and file reads.
+- **Snapshot (`List` / `ImmutableArray`):** Memory footprint is `O(N)` for the collection. Enables repeated iteration, random access, and deterministic sorting (`OrderBy`, `ThenBy`) without re-computation.
+- **Design Decision:** The application streams parsing and scoring, but materializes at deterministic ranking boundaries (`OrderBy`) where all elements must be known to establish correct ranks.
+
+---
+
+## Tasks 7, 8 & 9: Native Assembly / C Library Integration
+
+### 1. Function Contract
+```c
+uint64_t calculate_book_priority(uint64_t edition_count, uint64_t ratings_count, uint64_t book_age);
+```
+- **Inputs:**
+  - `edition_count` (unsigned 64-bit integer, range 0..50,000)
+  - `ratings_count` (unsigned 64-bit integer, >= 0)
+  - `book_age` (unsigned 64-bit integer, range 0..1,000)
+- **Output:** Unsigned 64-bit priority score (`uint64_t`).
+- **Calculation Algorithm:**
+  $$\text{score} = (\text{edition\_count} \times 10) + \lfloor\text{ratings\_count} / 2\rfloor - \text{book\_age}$$
+  If the result is negative, it clamps to `0`.
+- **Manually Checked Example:**
+  - `edition_count = 12`, `ratings_count = 55`, `book_age = 15`:
+  - $(12 \times 10) + \lfloor 55 / 2 \rfloor - 15 = 120 + 27 - 15 = 132$.
+
+### 2. Implementation & Build Procedure
+- **Source Files:**
+  - `native/linux/library_linux.asm` (AMD64 assembly using System V ABI: `rdi`, `rsi`, `rdx`, return in `rax`).
+  - `native/windows/library_windows.asm` (x64 assembly using Microsoft x64 calling convention: `rcx`, `rdx`, `r8`, return in `rax`).
+- **Build Command:**
+  ```bash
+  # On Linux (builds libcalc.so):
+  make -C native/linux
+
+  # On Windows (builds libcalc.dll):
+  make -C native/windows
+  ```
+- **Compiler Requirements:** `nasm` (Netwide Assembler) and `gcc` (GNU Compiler Collection).
+
+### 3. C# P/Invoke Binding and Adapter
+- **`NativeBridge.cs`:** Declares `[DllImport("calc", EntryPoint = "calculate_book_priority")]` and configures a dynamic `NativeLibrary.SetDllImportResolver` to resolve `libcalc.so` (Linux) or `libcalc.dll` (Windows) from the executing binary directory (`AppContext.BaseDirectory`).
+- **`NativeAdapter.cs`:** Safe wrapper validating domain inputs before making the native call. Translates domain validation errors, `DllNotFoundException`, and `BadImageFormatException` into explicit `Result<ulong, string>` failures.
+
+### 4. Integration into Real Workflow
+The native function is invoked inside LINQ Report 2 (`LinqReports.GeneratePriorityReport`) for every candidate book retrieved from the API. The calculated native score is displayed in the report, used in decade aggregation averages, and exported to disk.
+
+### 5. Integration Difficulties and Resolution
+- **Dynamic Library Path Resolution:** Under `dotnet test`, the working directory differs from the test assembly's output directory. This was resolved using `NativeLibrary.SetDllImportResolver` combined with `AppContext.BaseDirectory` so that `libcalc.so` is located reliably regardless of current working directory.
+- **ABI Differences:** Linux AMD64 passes the first three integer arguments in `rdi, rsi, rdx`, while Windows x64 uses `rcx, rdx, r8`. Separate platform implementations (`library_linux.asm` and `library_windows.asm`) ensure correct register usage.
+
+---
+
+## Complete Test Suite & Coverage
+
+The test project now contains **45 automated tests** (29 from previous assignments + 16 new for Assignment 8).
+
+### Required Coverage Verification
+
+| Area | Requirement | Test Methods in `Assignment8Tests.cs` | Status |
+|---|---|---|---|
+| **REPORTS** | Normal results, empty dataset, no matches, tied sort values, grouping & totals | `AuthorReport_ComputesCorrectAggregatesAndDeterministicOrdering`<br>`AuthorReport_HandlesEmptyAndNoMatchingRecords`<br>`PriorityReport_IntegratesCurriedScorerAndNativePriority`<br>`PriorityReport_HandlesEmptyDataset_AndTiedScoresDeterministically` | **PASSED** |
+| **EXTENSIONS** | Both custom extensions tested with meaningful assertions and used in code | `BookExtensions_GetAge_CalculatesCorrectAgeAndHandlesEdgeCases`<br>`BookExtensions_WithMinimumEditions_FiltersCorrectly` | **PASSED** |
+| **CONFIGURED FUNCTIONS** | Two partially applied functions tested on identical input with different results | `CurriedScoring_TwoConfigurations_ProduceDifferentResultsOnSameInput` | **PASSED** |
+| **DEFERRED EXECUTION** | No work on creation, work on iteration, materialization snapshot reuse | `DeferredExecution_DemonstratesLazyEvaluationAndSnapshotReuse` | **PASSED** |
+| **RESOURCE LIFETIME** | Disposal on success and early stop (`Take(1)`); lock release | `ResourceDisposal_StreamLines_ReleasesFileLockOnEarlyStop`<br>`ResourceDisposal_ExportReport_WritesSafelyAndHandlesBoundaryError` | **PASSED** |
+| **NATIVE INTEGRATION** | Real call matching manually expected value; controlled adapter failures | `CalculatePrioritySafe_ReturnsExpectedValue` (UnitTest1)<br>`NativeAdapter_ControlledFailures_ReturnClearResultFailures` | **PASSED** |
+| **COMPLETE WORKFLOWS** | Normal workflow on API data; error path preserving state | `CompleteWorkflow_IntegratesApiDataWithReportsAndNativeCall`<br>`FailedTransition_PreservesOriginalState` | **PASSED** |
+| **FILE BOUNDARIES** | Missing files, malformed JSON, and invalid export paths handled safely | `MissingFile_ReturnsOperationalFailureWithoutStateChange`<br>`MalformedFile_ReturnsFailureWithoutPartialUpdate`<br>`ResourceDisposal_ExportReport_WritesSafelyAndHandlesBoundaryError` | **PASSED** |
+
+### Running Tests
+```bash
+# 1. Build the native shared library:
+make -C native/linux
+
+# 2. Run the full test suite:
+dotnet test Assignment1FP.Tests/Assignment1FP.Tests.csproj
+```
+**Latest test outcome:** `Passed: 45, Failed: 0, Skipped: 0, Total: 45`.
+
+---
+
+## Defense Guide: What to Show During Individual Defense
+
+1. **Run the Application on API Data:**
+   ```bash
+   dotnet run --project AssigmnetIFP
+   ```
+   - Choose Option `1`, enter search query (e.g. `functional programming` or `algorithms`), and enter minimum year (e.g. `2015`).
+   - Run **Option 2** (LINQ Report 1): show author grouping, count, sum of editions, and deterministic tie-breaker sorting.
+   - Run **Option 3** (LINQ Report 2): show curried functional score, real native assembly priority score, and decade summaries.
+   - Run **Option 4** (Compare Configured Functions): show how `PopularityBiasedScorer` and `RecencyBiasedScorer` invert the ranking order on the exact same books.
+   - Run **Option 5** (Export Reports): show safe export using `await using` to `reports/author_statistics_report.txt` and `reports/priority_native_report.txt`.
+2. **Show Calls to Custom Extensions:**
+   - In `LinqReports.cs`: show `books.WithMinimumEditions(minEditions)` and `b.GetAge(referenceYear)`.
+   - Explain why `GetAge` belongs on `Book` and `WithMinimumEditions` belongs on `IEnumerable<Book>`.
+3. **Show Curried Function & Partial Application:**
+   - Show `CurriedScoring.CreateScore` in `Services/CurriedScoring.cs`.
+   - Explain how `PopularityBiasedScorer` and `RecencyBiasedScorer` are created by fixing the `ScoringWeights` parameter.
+4. **Demonstrate Deferred Execution & Safe Disposal:**
+   - In `Assignment8Tests.cs`, walk through `DeferredExecution_DemonstratesLazyEvaluationAndSnapshotReuse` showing probe counter timing.
+   - Walk through `ResourceDisposal_StreamLines_ReleasesFileLockOnEarlyStop` showing file lock release on early exit.
+5. **Demonstrate Native Assembly Integration:**
+   - Show `native/linux/library_linux.asm`, show `calculate_book_priority` export.
+   - Show `NativeBridge.cs` P/Invoke declaration and `NativeAdapter.cs` safe validation wrapper.
+   - Run `dotnet test --filter Native` to show real call verification ($12 \times 10 + 27 - 15 = 132$) and boundary rejection tests.
