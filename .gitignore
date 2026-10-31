@@ -4,10 +4,8 @@
 
 ## Visual Studio / VS Code cache
 .vs/
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
+.vscode
+
 
 ## Native intermediate files
 *.o
