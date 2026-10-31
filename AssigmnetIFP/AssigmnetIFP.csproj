@@ -9,6 +9,14 @@
 
   <ItemGroup>
     <None Include="Data\*.json" CopyToOutputDirectory="PreserveNewest" />
+   <None Include="..\native\linux\libcalc.so" Condition="Exists('..\native\linux\libcalc.so')">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <Link>libcalc.so</Link>
+  </None>
+  <None Include="..\native\windows\libcalc.dll" Condition="Exists('..\native\windows\libcalc.dll')">
+    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <Link>libcalc.dll</Link>
+  </None>
   </ItemGroup>
 
 </Project>

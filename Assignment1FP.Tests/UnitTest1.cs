@@ -1,6 +1,7 @@
 ﻿using System.Collections.Immutable;
 using StudyResourceFinder.Models;
 using StudyResourceFinder.Services;
+using StudyResourceFinder.Native;
 using Xunit;
 using System.IO;
 
@@ -58,7 +59,7 @@ public class PipelineTests
         Assert.DoesNotContain(result, b => b.Title == "Unknown Year"); 
     }
 
-    // 4a. INVALID INPUT: ввод пользователя
+    // 4a. INVALID INPUT: user input
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -72,7 +73,7 @@ public class PipelineTests
         Assert.NotEmpty(error);
     }
 
-    // 4b. MISSING INPUT: записи с отсутствующими полями и null
+    // 4b. MISSING INPUT: records with missing fields and null
     [Fact]
     public void MissingRequiredFields_AreRejected_NoFabricatedResult()
     {
@@ -368,5 +369,17 @@ public class PipelineTests
         var failure = Assert.IsType<Result<BookWorkflowState, DomainError>.Failure>(result);
         Assert.Equal("InvalidWorkflowState", failure.Error.Code);
         Assert.Equal(4, completed.Recommendations.Count);
+    }
+[Fact]
+    public void CalculatePrioritySafe_ReturnsExpectedValue()
+    {
+        // (12 * 10) + (55 / 2) - 15 = 120 + 27 - 15 = 132
+        var result = NativeAdapter.CalculatePrioritySafe(12, 55, 15);
+
+        Assert.True(result.IsSuccess);
+        Assert.IsType<Result<ulong, string>.Success>(result);
+        
+        var success = (Result<ulong, string>.Success)result;
+        Assert.Equal(132UL, success.Value);
     }
 }

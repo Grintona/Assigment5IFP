@@ -1,5 +1,19 @@
-bin/
-obj/
+## Build results
+[Bb]in/
+[Oo]bj/
+
+## Visual Studio / VS Code cache
 .vs/
-.idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+## Native intermediate files
+*.o
+*.obj
+*.lib
+
+## OS generated
+.DS_Store
+Thumbs.db

@@ -1,0 +1,13 @@
+{
+    "files.associations": {
+        "*.asm": "nasm",
+        "*.nasm": "nasm",
+        "*.inc": "nasm"
+    },
+    "code-runner.executorMap": {
+        "nasm": "cd $dir && ([ -f Makefile ] && make all || (nasm -f elf64 -DPIC $fileName -o $fileNameWithoutExt.o && gcc -shared -fPIC -o lib$fileNameWithoutExt.so $fileNameWithoutExt.o))"
+    },
+    "code-runner.runInTerminal": true,
+    "code-runner.fileDirectoryAsCwd": true,
+    "code-runner.saveFileBeforeRun": true
+}
