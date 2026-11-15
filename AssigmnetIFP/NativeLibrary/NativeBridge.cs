@@ -46,6 +46,6 @@ internal static class NativeBridge
         return IntPtr.Zero;
     }
 
-    [DllImport(LibraryName, EntryPoint = "calculate_book_priority")]
+    [DllImport(LibraryName, EntryPoint = "calculate_book_priority", CallingConvention = CallingConvention.Cdecl)]
     internal static extern ulong CalculateBookPriority(ulong editionCount, ulong ratingsCount, ulong bookAge);
 }

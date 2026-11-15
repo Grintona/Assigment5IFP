@@ -4,15 +4,45 @@ public abstract record Result<T, E>
 {
     private Result() { }
 
-    public sealed record Success(T Value) : Result<T, E>;
+    public sealed record Success : Result<T, E>
+    {
+        public T Value { get; }
 
-    public sealed record Failure(E Error) : Result<T, E>;
+        public Success(T value)
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            Value = value;
+        }
+
+        public void Deconstruct(out T value) => value = Value;
+    }
+
+    public sealed record Failure : Result<T, E>
+    {
+        public E Error { get; }
+
+        public Failure(E error)
+        {
+            ArgumentNullException.ThrowIfNull(error);
+            Error = error;
+        }
+
+        public void Deconstruct(out E error) => error = Error;
+    }
 
     public bool IsSuccess => this is Success;
 
-    public static Result<T, E> Ok(T value) => new Success(value);
+    public static Result<T, E> Ok(T value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        return new Success(value);
+    }
 
-    public static Result<T, E> Fail(E error) => new Failure(error);
+    public static Result<T, E> Fail(E error)
+    {
+        ArgumentNullException.ThrowIfNull(error);
+        return new Failure(error);
+    }
 
     public Result<U, E> Map<U>(Func<T, U> transform)
     {

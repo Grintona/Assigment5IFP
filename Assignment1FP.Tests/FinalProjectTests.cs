@@ -331,5 +331,86 @@ public class FinalProjectTests
         }
     }
 
+    [Fact]
+    public void Result_SuccessAndFailure_EnforceNonNullInvariants()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Result<string, string>.Success(null!));
+        Assert.Throws<ArgumentNullException>(() => Result<string, string>.Ok(null!));
+        Assert.Throws<ArgumentNullException>(() => new Result<string, string>.Failure(null!));
+        Assert.Throws<ArgumentNullException>(() => Result<string, string>.Fail(null!));
+    }
+
+    [Fact]
+    public void ValidatedSearch_MissingKey_IndividuallyRejected()
+    {
+        var book = new Book("Valid Title", ImmutableArray<string>.Empty, 2020, 1, "", ImmutableArray<string>.Empty);
+        var result = ValidatedSearch.Create(new[] { book }, 2000, Policies.Popularity);
+        Assert.IsType<ValidationResult<ValidatedSearch>.Invalid>(result);
+        var invalid = (ValidationResult<ValidatedSearch>.Invalid)result;
+        Assert.Contains(invalid.Reasons, r => r.Contains("Key is missing for book at index 0."));
+    }
+
+    [Fact]
+    public void ValidatedSearch_MissingTitle_IndividuallyRejected()
+    {
+        var book = new Book("   ", ImmutableArray<string>.Empty, 2020, 1, "/key", ImmutableArray<string>.Empty);
+        var result = ValidatedSearch.Create(new[] { book }, 2000, Policies.Popularity);
+        Assert.IsType<ValidationResult<ValidatedSearch>.Invalid>(result);
+        var invalid = (ValidationResult<ValidatedSearch>.Invalid)result;
+        Assert.Contains(invalid.Reasons, r => r.Contains("Title is missing for book at index 0."));
+    }
+
+    [Fact]
+    public void ValidatedSearch_NegativeEditionCount_IndividuallyRejected()
+    {
+        var book = new Book("Valid Title", ImmutableArray<string>.Empty, 2020, -3, "/key", ImmutableArray<string>.Empty);
+        var result = ValidatedSearch.Create(new[] { book }, 2000, Policies.Popularity);
+        Assert.IsType<ValidationResult<ValidatedSearch>.Invalid>(result);
+        var invalid = (ValidationResult<ValidatedSearch>.Invalid)result;
+        Assert.Contains(invalid.Reasons, r => r.Contains("Edition count cannot be negative for book at index 0."));
+    }
+
+    [Fact]
+    public void ValidatedSearch_NegativePublishYear_IndividuallyRejected()
+    {
+        var book = new Book("Valid Title", ImmutableArray<string>.Empty, -10, 1, "/key", ImmutableArray<string>.Empty);
+        var result = ValidatedSearch.Create(new[] { book }, 2000, Policies.Popularity);
+        Assert.IsType<ValidationResult<ValidatedSearch>.Invalid>(result);
+        var invalid = (ValidationResult<ValidatedSearch>.Invalid)result;
+        Assert.Contains(invalid.Reasons, r => r.Contains("Publication year cannot be negative for book at index 0."));
+    }
+
+    [Fact]
+    public void ValidatedSearch_NullBookInArray_IndividuallyRejected()
+    {
+        var result = ValidatedSearch.Create(new Book[] { null! }, 2000, Policies.Popularity);
+        Assert.IsType<ValidationResult<ValidatedSearch>.Invalid>(result);
+        var invalid = (ValidationResult<ValidatedSearch>.Invalid)result;
+        Assert.Contains(invalid.Reasons, r => r.Contains("Book at index 0 cannot be null."));
+    }
+
+    [Fact]
+    public void ValidatedSearch_CreateResult_IndividualFieldRejections()
+    {
+        var missingKeyBook = new Book("Title", ImmutableArray<string>.Empty, 2020, 1, "", ImmutableArray<string>.Empty);
+        var res1 = ValidatedSearch.CreateResult(new[] { missingKeyBook }, 2000, Policies.Popularity);
+        Assert.False(res1.IsSuccess);
+        Assert.Equal("MissingKey", ((Result<ValidatedSearch, DomainError>.Failure)res1).Error.Code);
+
+        var missingTitleBook = new Book("", ImmutableArray<string>.Empty, 2020, 1, "/key", ImmutableArray<string>.Empty);
+        var res2 = ValidatedSearch.CreateResult(new[] { missingTitleBook }, 2000, Policies.Popularity);
+        Assert.False(res2.IsSuccess);
+        Assert.Equal("MissingTitle", ((Result<ValidatedSearch, DomainError>.Failure)res2).Error.Code);
+
+        var negEditionBook = new Book("Title", ImmutableArray<string>.Empty, 2020, -5, "/key", ImmutableArray<string>.Empty);
+        var res3 = ValidatedSearch.CreateResult(new[] { negEditionBook }, 2000, Policies.Popularity);
+        Assert.False(res3.IsSuccess);
+        Assert.Equal("NegativeEditionCount", ((Result<ValidatedSearch, DomainError>.Failure)res3).Error.Code);
+
+        var nullBook = ValidatedSearch.CreateResult(new Book[] { null! }, 2000, Policies.Popularity);
+        Assert.False(nullBook.IsSuccess);
+        Assert.Equal("MissingBook", ((Result<ValidatedSearch, DomainError>.Failure)nullBook).Error.Code);
+    }
+
     #endregion
 }

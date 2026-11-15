@@ -238,19 +238,27 @@ The application enforces strict architectural boundaries to preserve functional 
         <tr><td>Custom Extension Methods (<code>GetAge</code>, <code>WithMinimumEditions</code>)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
         <tr><td>Deferred Execution & Safe Stream Disposal</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
         <tr><td>Native Assembly Integration (x86-64 NASM)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
-        <tr><td>Automated Test Suite (62 xUnit Tests)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
+        <tr><td>Automated Test Suite (69 xUnit Tests)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
     </tbody>
 </table>
 
-<h2>7. Project Limitations (Ограничения проекта)</h2>
+<h2>7. Project Limitations & Architecture Details (Ограничения проекта)</h2>
 <p>
 The project operates within well-defined, intentional constraints aligned with its functional academic scope:
 </p>
 <ol>
     <li><strong>Open Library API Pagination & Rate Limits:</strong> The live API client is configured with a deterministic ceiling of 10 search results (<code>limit=10</code>) per query. While adequate for targeted course research, broad search queries return a single page of results without interactive cursor pagination.</li>
+    <li><strong>Offline Independence:</strong> The application is fully capable of running completely offline. All reproducible demonstrations, core workflows, and automated tests execute against local JSON fixtures (<code>Data/books.json</code>) without network calls.</li>
     <li><strong>In-Memory Session Persistence:</strong> Catalog updates and issued loans are maintained within the running session and exported to disk as formatted text and report artifacts (<code>reports/*.txt</code>). The system deliberately avoids an external relational database (e.g. PostgreSQL) to preserve zero-dependency functional purity.</li>
     <li><strong>Defensive Handling of Optional Metadata:</strong> In the Open Library JSON schema, author names and language lists are frequently omitted. Rather than rejecting viable books, the parser treats missing collections as empty arrays (<code>ImmutableArray&lt;string&gt;.Empty</code>), causing them to display as <code>"unknown"</code> in author aggregations.</li>
-    <li><strong>Platform Architecture for Native Routines:</strong> The low-level hardware acceleration assembly routine is compiled specifically for <strong>x86-64 (AMD64)</strong> architectures (ELF64 System V ABI on Linux and Microsoft x64 calling convention on Windows). Running on non-x86 architectures (such as ARM64 Apple Silicon) requires recompilation with an ARM-compatible toolchain.</li>
+    <li><strong>Hardware Acceleration & Assembly Architecture:</strong> The low-level hardware acceleration assembly routine is compiled specifically for <strong>x86-64 (AMD64)</strong> architectures:
+        <ul>
+            <li><strong>Register Conventions:</strong> System V AMD64 ABI on Linux passes parameters in <code>rdi</code> (edition count), <code>rsi</code> (ratings count), <code>rdx</code> (book age) and returns in <code>rax</code>. Microsoft x64 ABI on Windows passes parameters in <code>rcx</code>, <code>rdx</code>, <code>r8</code> and returns in <code>rax</code>.</li>
+            <li><strong>Instruction Selection:</strong> <code>imul rdi, 10</code> was chosen over single-operand <code>mul</code> to leverage the two-operand immediate form without clobbering <code>rax:rdx</code>. <code>shr rsi, 1</code> performs an unsigned logical shift right for <code>uint64_t</code> division without propagating sign bits.</li>
+            <li><strong>Unsigned Underflow Clamping:</strong> Evaluates the Carry Flag via <code>sub rdi, rdx</code> followed by <code>jnc .done</code>. If a borrow occurred (<code>CF=1</code>), <code>xor rdi, rdi</code> clamps the unsigned result to 0.</li>
+            <li><strong>Security Section:</strong> Includes <code>section .note.GNU-stack noalloc noexec nowrite progbits</code> to eliminate linker executable-stack warnings.</li>
+        </ul>
+    </li>
 </ol>
 
 <h2>8. Known Shortcomings & Future Scope (Известные недоработки и планы развития)</h2>
@@ -310,7 +318,7 @@ The project utilizes the following established tools, frameworks, and academic l
 
 <h2>10. Actual Automated Test Execution Results & Defects Discovered (Фактический результат тестов)</h2>
 <p>
-The test suite consists of <strong>62 automated xUnit tests</strong> executed via <code>dotnet test Assignment5.slnx</code>. All tests pass deterministically:
+The test suite consists of <strong>69 automated xUnit tests</strong> executed via <code>dotnet test Assignment5.slnx</code>. All tests pass deterministically:
 </p>
 <pre>
 Тестовый запуск для Assignment1FP.Tests.dll (.NETCoreApp,Version=v10.0)
@@ -319,12 +327,12 @@ The test suite consists of <strong>62 automated xUnit tests</strong> executed vi
 Запуск выполнения тестов; подождите...
 Общее количество тестовых файлов (1), соответствующих указанному шаблону.
 
-Пройден!   : не пройдено     0, пройдено    62, пропущено     0, всего    62, длительность 93 ms.
+Пройден!   : не пройдено     0, пройдено    69, пропущено     0, всего    69, длительность 101 ms.
 </pre>
 
 <h3>Defects Discovered and Resolved During Testing</h3>
 <p>
-Writing automated tests prior to final integration exposed three notable defects that were systematically resolved:
+Writing automated tests prior to final integration exposed four notable defects that were systematically resolved:
 </p>
 <ol>
     <li><strong>Temporal Coupling in Book Loan Approvals:</strong>
@@ -339,15 +347,19 @@ Writing automated tests prior to final integration exposed three notable defects
         <br><em>Defect:</em> Calling <code>Take(1)</code> on <code>StreamLines</code> left file descriptors open on Linux, causing subsequent file deletion tests to throw <code>IOException</code>.
         <br><em>Resolution:</em> Enclosed the <code>FileStream</code> and <code>StreamReader</code> in a C# <code>using</code> block inside the iterator method, ensuring the enumerator's <code>Dispose()</code> immediately closes file handles upon early exit.
     </li>
+    <li><strong>Result.Success Null Invariant Violation:</strong>
+        <br><em>Defect:</em> Calling <code>new Result.Success(null)</code> could instantiate a success result carrying a null reference.
+        <br><em>Resolution:</em> Enforced strict non-null invariants in <code>Success</code> and <code>Failure</code> constructors and <code>Result.Ok</code> via <code>ArgumentNullException.ThrowIfNull</code>.
+    </li>
 </ol>
 
 <h2>11. Build, Setup and Run Instructions</h2>
 <p><strong>Environment Requirements:</strong> .NET 10.0 SDK, GCC, NASM (for Linux native build).</p>
 <pre>
-# 1. Build the native shared library (automated during dotnet build, or manual):
+# 1. Build the native shared library:
 make -C native/linux
 
-# 2. Run all 62 automated tests:
+# 2. Run all 69 automated tests:
 dotnet test Assignment5.slnx
 
 # 3. Launch interactive console application:

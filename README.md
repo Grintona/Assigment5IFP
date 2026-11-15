@@ -180,21 +180,40 @@ Implemented in `Services/LinqReports.cs`, completely separated from display:
 - **Safe Asynchronous Disposal (`Services/ReportExporter.cs`):** `ExportReportAsync` uses `await using` on `FileStream` and `StreamWriter` to guarantee file handle release on all code paths.
 - **Iterator Lock Release:** `StreamLines` wraps file reading in `using` inside the iterator method, ensuring early termination (`Take(1)`) releases OS file locks immediately.
 
-### 4.7 Hardware Acceleration: AMD64 Native Assembly
-- Implemented in AMD64 assembly (`native/linux/library_linux.asm` and `native/windows/library_windows.asm`):
-  $$\text{score} = (\text{editions} \times 10) + \lfloor\text{ratings} / 2\rfloor - \text{age}$$
-- C# P/Invoke bridge (`NativeBridge.cs`) uses `NativeLibrary.SetDllImportResolver` to dynamically locate `libcalc.so` / `libcalc.dll` relative to `AppContext.BaseDirectory`.
-- `NativeAdapter.cs` validates inputs (clamping negative numbers and checking max bounds) before calling unmanaged code.
+### 4.7 Hardware Acceleration: AMD64 Native Assembly & Oral Defense Details
+- **Formula Implemented:**
+  $$\text{score} = (\text{edition\_count} \times 10) + \lfloor\text{ratings\_count} / 2\rfloor - \text{book\_age}$$
+- **P/Invoke Binding (`NativeLibrary/NativeBridge.cs`):**
+  Uses an explicit `CallingConvention = CallingConvention.Cdecl` and dynamic `NativeLibrary.SetDllImportResolver` to load `libcalc.so` / `libcalc.dll` from `AppContext.BaseDirectory`.
+- **Assembly Implementation Details for Oral Defense:**
+  1. **Argument Registers & ABI Conventions:**
+     - *Linux (System V AMD64 ABI):* 1st argument (`edition_count`) in `rdi`, 2nd argument (`ratings_count`) in `rsi`, 3rd argument (`book_age`) in `rdx`. Return value in `rax`.
+     - *Windows (Microsoft x64 ABI):* 1st argument (`edition_count`) in `rcx`, 2nd argument (`ratings_count`) in `rdx`, 3rd argument (`book_age`) in `r8`. Return value in `rax`.
+  2. **`imul` vs `mul`:**
+     - `imul rdi, 10` is used because it supports the two-operand form with an immediate literal constant (`imul reg, imm`).
+     - Standard `mul` only supports single-operand register forms (`mul r/m`), implicitly assumes `rax` as multiplicand, and writes a 128-bit product across `rdx:rax`, clobbering input registers and requiring extra moves.
+     - For positive inputs within validated bounds (editions $\le 50,000$), the lower 64 bits produced by `imul` and `mul` are identical in two's complement arithmetic.
+  3. **`shr` vs `sar`:**
+     - `shr rsi, 1` performs an **unsigned logical shift right**, zero-filling the most significant bit.
+     - `sar` performs an arithmetic shift right, preserving the sign bit (sign-extension).
+     - Because `ratings_count` is declared as an unsigned 64-bit integer (`uint64_t`), `shr` is mathematically correct and prevents large unsigned values ($\ge 2^{63}$) from propagating leading ones.
+  4. **Unsigned Underflow Clamping (`sub` and `jnc` vs signed `cmp/jge`):**
+     - When subtracting `book_age` (`rdx`) from the cumulative sum (`rdi`), unsigned arithmetic sets the CPU Carry Flag (`CF = 1`) if `book_age > sum` (borrow occurred).
+     - Using `sub rdi, rdx` followed by `jnc .done` branches if no borrow occurred (`CF = 0`).
+     - If a borrow occurred (`CF = 1`), `xor rdi, rdi` cleanly clamps the result to `0`. This strictly preserves unsigned 64-bit arithmetic semantics.
+  5. **Non-Executable Stack (`.note.GNU-stack`):**
+     - `native/linux/library_linux.asm` includes `section .note.GNU-stack noalloc noexec nowrite progbits`.
+     - This informs the GNU linker (ld) that the assembly translation unit does not require an executable stack, enforcing security (NX/DEP) and eliminating linker security warnings.
 
 ---
 
 ## 5. Automated Testing Suite
 
-The test project contains **62 automated tests** implemented in xUnit 2.9.3, providing 100% deterministic coverage:
+The test project contains **69 automated tests** implemented in xUnit 2.9.3, providing 100% deterministic coverage:
 
 | Category | Count | Scope & Verification | Status |
 |---|---|---|---|
-| **Pure Functions & Domain Validation** | 34 | Age calculation, edition filtering, author diversity constraints, difficulty pacing, curried partial application, Option Map/Bind/Match, search factory validation | **PASSED** |
+| **Pure Functions & Domain Validation** | 41 | Age calculation, edition filtering, author diversity constraints, difficulty pacing, curried partial application, Option Map/Bind/Match, search factory validation, Result.Success null rejection, individual missing key/title/negative edition cases | **PASSED** |
 | **Complete Workflows** | 18 | End-to-end execution of Workflow 1 (scoring/ranking), Workflow 2 (study plan scheduling), Workflow 3 (multi-stage loan), and live API integration | **PASSED** |
 | **State Machine & Temporal Safety** | 5 | Rejection of unvalidated draft approvals, prevention of duplicate approvals, preservation of rejected state | **PASSED** |
 | **Persistence & Resource Disposal** | 5 | Missing file handling, malformed JSON recovery, safe export writing, early iterator file lock release (`Take(1)`) | **PASSED** |
@@ -207,22 +226,24 @@ The test project contains **62 automated tests** implemented in xUnit 2.9.3, pro
 Запуск выполнения тестов; подождите...
 Общее количество тестовых файлов (1), соответствующих указанному шаблону.
 
-Пройден!   : не пройдено     0, пройдено    62, пропущено     0, всего    62, длительность 93 ms.
+Пройден!   : не пройдено     0, пройдено    69, пропущено     0, всего    69, длительность 101 ms.
 ```
 
 ### Defects Discovered and Resolved During Testing
 1. **Premature Loan Approvals:** Automated tests caught an invalid sequence where drafts could be approved directly. Fixed by enforcing typed state transitions (`Draft -> Validated -> Approved`).
 2. **VSTest Runner Dynamic Library Resolution:** Tests initially failed finding `libcalc.so` due to working directory discrepancies. Fixed by configuring dynamic DLL resolution via `AppContext.BaseDirectory`.
 3. **Resource Leak on Early Iteration Termination:** Early `Take(1)` iteration previously kept file streams locked. Resolved by encapsulating stream initialization in `using` blocks within the `yield return` iterator.
+4. **Result.Success Null Invariant:** Identified that `Result.Success` could accept null. Enforced non-null invariants in constructors and factories with `ArgumentNullException.ThrowIfNull`.
 
 ---
 
 ## 6. Project Limitations & Known Shortcomings
 
 1. **API Rate Limiting & Page Depth:** OpenLibrary search is configured with a deterministic limit of 10 items (`limit=10`) per query without pagination.
-2. **Session Persistence:** Catalog updates and loans are held in memory during the session and exported to disk as structured report files (`reports/*.txt`). An external SQL database was deliberately omitted to preserve zero-dependency functional purity.
-3. **Defensive Metadata Handling:** Missing author or language lists in raw JSON records are treated as empty arrays rather than rejecting otherwise valid books.
-4. **Assembly Architecture:** The native routine is compiled for x86-64 AMD64 architectures. Non-x86 platforms (e.g. ARM64) require a managed fallback or recompilation.
+2. **Offline Independence:** While an OpenLibrary API option is provided, the application is **completely offline-capable**. All reproducible workflows, reports, and all 69 automated tests run against local files (`Data/books.json`) without internet connectivity.
+3. **Session Persistence:** Catalog updates and loans are held in memory during the session and exported to disk as structured report files (`reports/*.txt`). An external SQL database was deliberately omitted to preserve zero-dependency functional purity.
+4. **Defensive Metadata Handling:** Missing author or language lists in raw JSON records are treated as empty arrays rather than rejecting otherwise valid books.
+5. **Assembly Architecture:** The native routine is compiled for x86-64 AMD64 architectures. Non-x86 platforms (e.g. ARM64) require a managed fallback or recompilation.
 
 ---
 
@@ -237,10 +258,10 @@ The test project contains **62 automated tests** implemented in xUnit 2.9.3, pro
 # 1. Compile the native shared library:
 make -C native/linux
 
-# 2. Run the full automated test suite (all 62 tests):
+# 2. Run the full automated test suite (all 69 tests):
 dotnet test Assignment5.slnx
 
-# 3. Launch the interactive application:
+# 3. Launch the interactive application (offline mode with Data/books.json):
 dotnet run --project AssigmnetIFP
 ```
 
