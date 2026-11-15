@@ -24,8 +24,9 @@ public static class BookWorkflow
 
         return state switch
         {
-            BookWorkflowState.Pending pending => Result<BookWorkflowState, DomainError>.Ok(
-                new BookWorkflowState.Completed(BookPipeline.FindResources(pending.Search))),
+            BookWorkflowState.Pending pending =>
+                BookPipeline.FindResourcesResult(pending.Search.Books, pending.Search.MinimumYear, pending.Search.ScoringPolicy)
+                    .Map(recommendations => (BookWorkflowState)new BookWorkflowState.Completed(recommendations)),
             BookWorkflowState.Completed => Result<BookWorkflowState, DomainError>.Fail(
                 new("InvalidWorkflowState", "The search has already been completed.")),
             BookWorkflowState.Rejected rejected => Result<BookWorkflowState, DomainError>.Fail(

@@ -10,7 +10,7 @@
 | **Author / Student** | **Gulyayev Mikhail** |
 | **Academic Group** | **IT-2512** |
 | **Submission Category** | **Individual Project (Team of 1)** |
-| **Implemented Scope** | 100% of functional core, domain models, 3 workflows, LINQ analytics, safe persistence, native assembly, and 70 automated tests |
+| **Implemented Scope** | 100% of functional core, domain models, 3 workflows, LINQ analytics, safe persistence, native assembly, and 71 automated tests |
 | **Target Platform** | **.NET 10.0** (`net10.0`), C# 13, x86-64 NASM AMD64 Assembly |
 | **Official Reports** | Available in `docs/`: [`Group_Project_Report.pdf`](docs/Group_Project_Report.pdf) and [`Individual_Contribution_Report.pdf`](docs/Individual_Contribution_Report.pdf) |
 
@@ -211,12 +211,12 @@ Implemented in `Services/LinqReports.cs`, completely separated from display:
 
 ## 5. Automated Testing Suite
 
-The test project contains **70 automated tests** implemented in xUnit 2.9.3, providing 100% deterministic coverage:
+The test project contains **71 automated tests** implemented in xUnit 2.9.3, providing 100% deterministic coverage:
 
 | Category | Count | Scope & Verification | Status |
 |---|---|---|---|
 | **Pure Functions & Domain Validation** | 42 | Age calculation, edition filtering, author diversity constraints, difficulty pacing, curried partial application, Option Map/Bind/Match, search factory validation, Result.Success null rejection, individual missing key/title/negative edition cases, managed fallback equivalence | **PASSED** |
-| **Complete Workflows** | 18 | End-to-end execution of Workflow 1 (scoring/ranking), Workflow 2 (study plan scheduling), Workflow 3 (multi-stage loan), and live API integration | **PASSED** |
+| **Complete Workflows** | 19 | End-to-end execution of Workflow 1 (scoring/ranking and BookWorkflow TransitionResult with monadic pipeline), Workflow 2 (study plan scheduling), Workflow 3 (multi-stage loan), and live API integration | **PASSED** |
 | **State Machine & Temporal Safety** | 5 | Rejection of unvalidated draft approvals, prevention of duplicate approvals, preservation of rejected state | **PASSED** |
 | **Persistence & Resource Disposal** | 5 | Missing file handling, malformed JSON recovery, safe export writing, early iterator file lock release (`Take(1)`) | **PASSED** |
 
@@ -228,7 +228,7 @@ The test project contains **70 automated tests** implemented in xUnit 2.9.3, pro
 Запуск выполнения тестов; подождите...
 Общее количество тестовых файлов (1), соответствующих указанному шаблону.
 
-Пройден!   : не пройдено     0, пройдено    70, пропущено     0, всего    70, длительность 103 ms.
+Пройден!   : не пройдено     0, пройдено    71, пропущено     0, всего    71, длительность 123 ms.
 ```
 
 ### Defects Discovered and Resolved During Testing
@@ -242,7 +242,7 @@ The test project contains **70 automated tests** implemented in xUnit 2.9.3, pro
 ## 6. Project Limitations & Known Shortcomings
 
 1. **API Rate Limiting & Page Depth:** OpenLibrary search is configured with a deterministic limit of 10 items (`limit=10`) per query without pagination.
-2. **Offline Independence:** While an OpenLibrary API option is provided, the application is **completely offline-capable**. All reproducible workflows, reports, and all 70 automated tests run against local files (`Data/books.json`) without internet connectivity.
+2. **Offline Independence:** While an OpenLibrary API option is provided, the application is **completely offline-capable**. All reproducible workflows, reports, and all 71 automated tests run against local files (`Data/books.json`) without internet connectivity.
 3. **Session Persistence:** Catalog updates and loans are held in memory during the session and exported to disk as structured report files (`reports/*.txt`). An external SQL database was deliberately omitted to preserve zero-dependency functional purity.
 4. **Defensive Metadata Handling:** Missing author or language lists in raw JSON records are treated as empty arrays rather than rejecting otherwise valid books.
 5. **Cross-Platform Assembly Support:** The assembly implementation supports both Linux System V AMD64 and Windows x64. On unsupported environments (e.g. ARM64 or systems without NASM), the system automatically activates its managed fallback.
@@ -265,7 +265,7 @@ make -C native/linux
 nasm -f win64 native/windows/library_windows.asm -o native/windows/library_windows.obj
 gcc -shared native/windows/library_windows.obj -o AssigmnetIFP/bin/Debug/net10.0/libcalc.dll
 
-# 2. Run the full automated test suite (all 70 tests):
+# 2. Run the full automated test suite (all 71 tests):
 dotnet test Assignment5.slnx
 
 # 3. Launch the interactive application (offline mode with Data/books.json):

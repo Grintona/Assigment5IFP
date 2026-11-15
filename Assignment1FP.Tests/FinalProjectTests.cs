@@ -423,5 +423,33 @@ public class FinalProjectTests
         Assert.Equal(0UL, underflow);
     }
 
+    [Fact]
+    public void BookWorkflow_TransitionResult_PendingState_ExecutesMonadicPipeline_AndHandlesScoringFailure()
+    {
+        var books = new[]
+        {
+            new Book("FP in C#", ImmutableArray.Create("Buonanno"), 2022, 10, "/fp", ImmutableArray.Create("eng"))
+        };
+
+        var validCreation = ValidatedSearch.Create(books, 2020, b => b.EditionCount * 2.0);
+        var validSearch = Assert.IsType<ValidationResult<ValidatedSearch>.Valid>(validCreation).Value;
+
+        var pending = new BookWorkflowState.Pending(validSearch);
+        var successResult = BookWorkflow.TransitionResult(pending);
+
+        var success = Assert.IsType<Result<BookWorkflowState, DomainError>.Success>(successResult);
+        var completed = Assert.IsType<BookWorkflowState.Completed>(success.Value);
+        Assert.Single(completed.Recommendations);
+        Assert.Equal(20.0, completed.Recommendations[0].Score);
+
+        var nanCreation = ValidatedSearch.Create(books, 2020, _ => double.NaN);
+        var nanSearch = Assert.IsType<ValidationResult<ValidatedSearch>.Valid>(nanCreation).Value;
+        var nanPending = new BookWorkflowState.Pending(nanSearch);
+
+        var failureResult = BookWorkflow.TransitionResult(nanPending);
+        var failure = Assert.IsType<Result<BookWorkflowState, DomainError>.Failure>(failureResult);
+        Assert.Equal("InvalidScore", failure.Error.Code);
+    }
+
     #endregion
 }

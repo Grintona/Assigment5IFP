@@ -238,15 +238,17 @@ static void RunWorkflow1(
 
     var validSearch = ((ValidationResult<ValidatedSearch>.Valid)validationResult).Value;
     var state = new BookWorkflowState.Pending(validSearch);
-    var transitionResult = BookWorkflow.TransitionResult(state);
-    if (transitionResult is Result<BookWorkflowState, DomainError>.Failure failure)
+    var transitionResult = BookWorkflow.TransitionResult(state)
+        .Map(st => ((BookWorkflowState.Completed)st).Recommendations);
+
+    if (transitionResult is Result<IReadOnlyList<Recommendation>, DomainError>.Failure failure)
     {
-        Console.WriteLine($"Workflow 1 state transition failed: {failure.Error}");
+        Console.WriteLine($"Workflow 1 failed: [{failure.Error.Code}] {failure.Error.Message}");
         return;
     }
 
-    var completed = (BookWorkflowState.Completed)((Result<BookWorkflowState, DomainError>.Success)transitionResult).Value;
-    PrintBooks.Print(policyName, completed.Recommendations);
+    var recommendations = ((Result<IReadOnlyList<Recommendation>, DomainError>.Success)transitionResult).Value;
+    PrintBooks.Print(policyName, recommendations);
 }
 
 static void RunWorkflow2StudyPlan(IEnumerable<Book> books)
@@ -476,19 +478,14 @@ static async Task RunExportAllArtifactsAsync(IEnumerable<Book> books, int minYea
     }
 
     var catalogList = books.ToList();
-    var draftResult = LoanWorkflow.CreateDraft("ST-2026-EXPORT", BorrowerTier.Honors, catalogList.Take(2).Select(b => b.Key), 4);
-    if (draftResult is Result<LoanState.Draft, DomainError>.Success sDraft)
+    var loanRes = LoanWorkflow.CreateDraft("ST-2026-EXPORT", BorrowerTier.Honors, catalogList.Take(2).Select(b => b.Key), 4)
+        .Bind(draft => LoanWorkflow.ValidateDraft(draft, catalogList, LoanWorkflow.AcademicDiscountFeePolicy))
+        .Bind(validated => LoanWorkflow.ApproveLoan(validated));
+
+    if (loanRes is Result<LoanState.Approved, DomainError>.Success sApp)
     {
-        var valResult = LoanWorkflow.ValidateDraft(sDraft.Value, catalogList, LoanWorkflow.AcademicDiscountFeePolicy);
-        if (valResult is Result<LoanState.Validated, DomainError>.Success sVal)
-        {
-            var appResult = LoanWorkflow.ApproveLoan(sVal.Value);
-            if (appResult is Result<LoanState.Approved, DomainError>.Success sApp)
-            {
-                var loanExport = await ReportExporter.ExportLoanAgreementAsync(loanPath, sApp.Value);
-                Console.WriteLine(loanExport.IsSuccess ? $"[OK] Exported: {loanPath}" : "[FAILED] Loan Agreement");
-            }
-        }
+        var loanExport = await ReportExporter.ExportLoanAgreementAsync(loanPath, sApp.Value);
+        Console.WriteLine(loanExport.IsSuccess ? $"[OK] Exported: {loanPath}" : "[FAILED] Loan Agreement");
     }
 }
 
@@ -508,17 +505,12 @@ static async Task RunFullCapstoneDemonstration(IEnumerable<Book> books, int minY
 
     Console.WriteLine("\n--> WORKFLOW 3: Safe Multi-Stage Book Loan (with AcademicDiscountFeePolicy)");
     var catalog = books.ToList();
-    var draftRes = LoanWorkflow.CreateDraft("ST-DEFENSE-01", BorrowerTier.Honors, catalog.Take(2).Select(b => b.Key), 3);
-    if (draftRes is Result<LoanState.Draft, DomainError>.Success sDraft)
-    {
-        var valRes = LoanWorkflow.ValidateDraft(sDraft.Value, catalog, LoanWorkflow.AcademicDiscountFeePolicy);
-        if (valRes is Result<LoanState.Validated, DomainError>.Success sVal)
-        {
-            var appRes = LoanWorkflow.ApproveLoan(sVal.Value);
-            if (appRes is Result<LoanState.Approved, DomainError>.Success sApp)
-                Console.WriteLine(ReportExporter.FormatLoanAgreement(sApp.Value));
-        }
-    }
+    var loanRes = LoanWorkflow.CreateDraft("ST-DEFENSE-01", BorrowerTier.Honors, catalog.Take(2).Select(b => b.Key), 3)
+        .Bind(draft => LoanWorkflow.ValidateDraft(draft, catalog, LoanWorkflow.AcademicDiscountFeePolicy))
+        .Bind(validated => LoanWorkflow.ApproveLoan(validated));
+
+    if (loanRes is Result<LoanState.Approved, DomainError>.Success sApp)
+        Console.WriteLine(ReportExporter.FormatLoanAgreement(sApp.Value));
 
     Console.WriteLine("\n--> LAZY PROCESSING & DEFERRED EXECUTION (yield return):");
     RunLazyProcessingDemo(books);
