@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -20,6 +20,17 @@
 
   <ItemGroup>
     <ProjectReference Include="..\AssigmnetIFP\AssigmnetIFP.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\native\linux\libcalc.so" Condition="Exists('..\native\linux\libcalc.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libcalc.so</Link>
+    </None>
+    <None Include="..\native\windows\libcalc.dll" Condition="Exists('..\native\windows\libcalc.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libcalc.dll</Link>
+    </None>
   </ItemGroup>
 
 </Project>

@@ -25,7 +25,6 @@ public class PipelineTests
     private static string[] Titles(IEnumerable<Recommendation> items) =>
         items.Select(r => r.Book.Title).ToArray();
 
-    // 1. NORMAL WORKFLOW
     [Fact]
     public void NormalWorkflow_ProducesDocumentedResult()
     {
@@ -38,28 +37,25 @@ public class PipelineTests
         Assert.Equal(new[] { 1, 2, 3, 4 }, result.Select(r => r.Rank).ToArray());
     }
 
-    // 2. EMPTY DATASET
     [Fact]
     public void EmptyDataset_ReturnsEmptyResult()
     {
         var (valid, errors) = BookParser.ParseAll(new List<BookDto>());
 
-        Assert.Empty(errors);   
+        Assert.Empty(errors);
         Assert.Empty(BookPipeline.FindResources(valid, 2000, Policies.Popularity));
     }
 
-    // 3. BOUNDARY VALUE
     [Fact]
     public void BoundaryYear_IsIncluded_AndOneYearEarlierIsExcluded()
     {
         var result = BookPipeline.FilterBooks(CreateBooks(), 2000);
 
-        Assert.Contains(result, b => b.Title == "Boundary Book");      
-        Assert.DoesNotContain(result, b => b.Title == "Old Book");    
-        Assert.DoesNotContain(result, b => b.Title == "Unknown Year"); 
+        Assert.Contains(result, b => b.Title == "Boundary Book");
+        Assert.DoesNotContain(result, b => b.Title == "Old Book");
+        Assert.DoesNotContain(result, b => b.Title == "Unknown Year");
     }
 
-    // 4a. INVALID INPUT: user input
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -73,7 +69,6 @@ public class PipelineTests
         Assert.NotEmpty(error);
     }
 
-    // 4b. MISSING INPUT: records with missing fields and null
     [Fact]
     public void MissingRequiredFields_AreRejected_NoFabricatedResult()
     {
@@ -95,7 +90,6 @@ public class PipelineTests
         Assert.Throws<ArgumentNullException>(() => BookPipeline.ScoreBooks(CreateBooks(), null!));
     }
 
-    // 5. TWO POLICIES
     [Fact]
     public void TwoPolicies_DifferOnSameInput()
     {
@@ -110,7 +104,6 @@ public class PipelineTests
             new[] { "Recent Book", "Mid Book", "Popular Book", "Boundary Book" }, Titles(recent));
     }
 
-    // 6. PURITY AND STAGES
     [Fact]
     public void Stages_DoNotModifyCallerData()
     {
@@ -118,11 +111,11 @@ public class PipelineTests
         var booksBefore = books.ToList();
         var authorsBefore = books.Select(b => b.Authors.ToArray()).ToList();
 
-        var filtered = BookPipeline.FilterBooks(books, 2000);      
+        var filtered = BookPipeline.FilterBooks(books, 2000);
         var filteredBefore = filtered.ToList();
-        var scored = BookPipeline.ScoreBooks(filtered, Policies.Popularity); 
+        var scored = BookPipeline.ScoreBooks(filtered, Policies.Popularity);
         var scoredBefore = scored.ToList();
-        BookPipeline.RankBooks(scored);                            
+        BookPipeline.RankBooks(scored);
 
         Assert.Equal(booksBefore, books);
         Assert.Equal(filteredBefore, filtered);
@@ -373,12 +366,12 @@ public class PipelineTests
 [Fact]
     public void CalculatePrioritySafe_ReturnsExpectedValue()
     {
-        // (12 * 10) + (55 / 2) - 15 = 120 + 27 - 15 = 132
+
         var result = NativeAdapter.CalculatePrioritySafe(12, 55, 15);
 
         Assert.True(result.IsSuccess);
         Assert.IsType<Result<ulong, string>.Success>(result);
-        
+
         var success = (Result<ulong, string>.Success)result;
         Assert.Equal(132UL, success.Value);
     }

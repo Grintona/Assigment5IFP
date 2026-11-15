@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -9,13 +11,14 @@ using StudyResourceFinder.Services;
 
 const string DefaultFile = "Data/books.json";
 
-Console.WriteLine("==============================");
-Console.WriteLine("    STUDY RESOURCE FINDER");
-Console.WriteLine("==============================");
+Console.WriteLine("==================================================");
+Console.WriteLine("    ACADEMIC STUDY RESOURCE & LENDING SYSTEM      ");
+Console.WriteLine("         Final Project (FP 2026-2027)             ");
+Console.WriteLine("==================================================");
 Console.WriteLine("1. Search books via Open Library API");
 Console.WriteLine("2. Load books from a JSON file");
 Console.WriteLine("3. Exit");
-Console.WriteLine("==============================");
+Console.WriteLine("==================================================");
 Console.Write("Choose an option: ");
 string? choice = Console.ReadLine();
 
@@ -39,14 +42,14 @@ if (choice == "1")
 }
 else
 {
-    Console.Write($"Enter file path (Enter for DefaultFile): ");
+    Console.Write($"Enter file path (Enter for default '{DefaultFile}'): ");
     string? path = Console.ReadLine();
     sourceInput = string.IsNullOrWhiteSpace(path)
         ? Path.Combine(AppContext.BaseDirectory, DefaultFile)
         : path.Trim();
 }
 
-Console.Write("Enter minimum publication year: ");
+Console.Write("Enter minimum publication year (e.g. 2000): ");
 if (!BookParser.TryParseMinYear(Console.ReadLine(), out int minYear, out string yearError))
 {
     Console.WriteLine(yearError);
@@ -59,7 +62,7 @@ try
 {
     if (choice == "1")
     {
-        Console.WriteLine($"Searching for books with query: {sourceInput}");
+        Console.WriteLine($"Searching for books with query: '{sourceInput}'...");
         using var httpClient = new HttpClient();
         dtos = await new OpenLibraryClient(httpClient).SearchBooksAsync(sourceInput);
     }
@@ -69,7 +72,7 @@ try
         var fileResult = await OpenLibraryClient.LoadFromFileResult(sourceInput);
         if (fileResult is Result<IReadOnlyList<BookDto>, DomainError>.Failure fileFailure)
         {
-            Console.WriteLine(fileFailure.Error);
+            Console.WriteLine($"[ERROR] {fileFailure.Error}");
             return;
         }
 
@@ -81,7 +84,7 @@ catch (HttpRequestException ex)
     Console.WriteLine($"Error fetching data from Open Library API: {ex.Message}");
     return;
 }
-catch (IOException ex) 
+catch (IOException ex)
 {
     Console.WriteLine($"Error reading file: {ex.Message}");
     return;
@@ -107,7 +110,7 @@ Console.WriteLine();
 Console.WriteLine($"Loaded {dtos.Count} records: {books.Length} valid, {errors.Length} rejected.");
 foreach (var error in errors)
 {
-    Console.WriteLine($"  Rejected: {error}");
+    Console.WriteLine($"  [Rejected] {error}");
 }
 
 bool exit = false;
@@ -115,13 +118,16 @@ while (!exit)
 {
     Console.WriteLine();
     Console.WriteLine("==================================================");
-    Console.WriteLine("Choose action:");
-    Console.WriteLine("1. Original Recommendations (Popularity / Recency)");
-    Console.WriteLine("2. LINQ Report 1: Author Publishing & Editions");
-    Console.WriteLine("3. LINQ Report 2: Curried Scoring & Native Priority");
-    Console.WriteLine("4. Compare Configured Curried Functions");
-    Console.WriteLine("5. Export Reports to Files (Safe Resource Disposal)");
-    Console.WriteLine("6. Run Full Assignment 8 Demonstration");
+    Console.WriteLine("               APPLICATION WORKFLOWS              ");
+    Console.WriteLine("==================================================");
+    Console.WriteLine("1. Workflow 1: Resource Discovery & Recommendations");
+    Console.WriteLine("2. Workflow 2: Generate Personalized Study Plan");
+    Console.WriteLine("3. Workflow 3: Request Academic Book Loan / Reservation");
+    Console.WriteLine("4. LINQ Report 1: Author Publishing & Edition Reach");
+    Console.WriteLine("5. LINQ Report 2: Priority Score & Decade Dynamics");
+    Console.WriteLine("6. Compare Configured Scoring Policies (Curried)");
+    Console.WriteLine("7. Export Reports & Artifacts to Files (Safe Disposal)");
+    Console.WriteLine("8. Run Full Capstone Demonstration (All 3 Workflows)");
     Console.WriteLine("0. Exit");
     Console.Write("Enter your choice: ");
     string? menuChoice = Console.ReadLine();
@@ -130,31 +136,35 @@ while (!exit)
     switch (menuChoice)
     {
         case "1":
-            RunOriginalWorkflowMenu(books, minYear);
+            RunWorkflow1Menu(books, minYear);
             break;
 
         case "2":
-            RunAuthorReport(books, minYear);
+            RunWorkflow2StudyPlan(books);
             break;
 
         case "3":
-            RunPriorityReport(books, minYear);
+            RunWorkflow3LoanReservation(books);
             break;
 
         case "4":
-            RunConfiguredCurriedComparison(books, minYear);
+            RunAuthorReport(books, minYear);
             break;
 
         case "5":
-            await RunExportReportsAsync(books, minYear);
+            RunPriorityReport(books, minYear);
             break;
 
         case "6":
-            Console.WriteLine("\n>>> RUNNING FULL ASSIGNMENT 8 DEMONSTRATION <<<\n");
-            RunAuthorReport(books, minYear);
-            RunPriorityReport(books, minYear);
             RunConfiguredCurriedComparison(books, minYear);
-            await RunExportReportsAsync(books, minYear);
+            break;
+
+        case "7":
+            await RunExportAllArtifactsAsync(books, minYear);
+            break;
+
+        case "8":
+            await RunFullCapstoneDemonstration(books, minYear);
             break;
 
         case "0":
@@ -166,6 +176,163 @@ while (!exit)
             Console.WriteLine("Invalid choice.");
             break;
     }
+}
+
+static void RunWorkflow1Menu(IEnumerable<Book> books, int minYear)
+{
+    Console.WriteLine("==============================");
+    Console.WriteLine("Workflow 1: Choose Ranking Policy");
+    Console.WriteLine("1. Popularity (Editions)");
+    Console.WriteLine("2. Recency (Publish Year)");
+    Console.WriteLine("3. Both (Side-by-side comparison)");
+    Console.Write("Enter your choice: ");
+    string? policyChoice = Console.ReadLine();
+    Console.WriteLine("==============================");
+
+    switch (policyChoice)
+    {
+        case "1":
+            RunWorkflow1(books, minYear, Policies.Popularity, "Popularity Policy");
+            break;
+        case "2":
+            RunWorkflow1(books, minYear, Policies.Recency, "Recency Policy");
+            break;
+        case "3":
+            RunWorkflow1(books, minYear, Policies.Popularity, "Popularity Policy");
+            RunWorkflow1(books, minYear, Policies.Recency, "Recency Policy");
+            break;
+        default:
+            Console.WriteLine("Invalid choice.");
+            break;
+    }
+}
+
+static void RunWorkflow1(
+    IEnumerable<Book> books,
+    int minimumYear,
+    Func<Book, double> scoringPolicy,
+    string policyName)
+{
+    var result = BookPipeline.FindResourcesResult(books, minimumYear, scoringPolicy);
+    if (result is Result<IReadOnlyList<Recommendation>, DomainError>.Failure failure)
+    {
+        Console.WriteLine($"Workflow 1 failed: {failure.Error}");
+        return;
+    }
+
+    var recommendations = ((Result<IReadOnlyList<Recommendation>, DomainError>.Success)result).Value;
+    PrintBooks.Print(policyName, recommendations);
+}
+
+static void RunWorkflow2StudyPlan(IEnumerable<Book> books)
+{
+    Console.WriteLine("=== Workflow 2: Generate Personalized Study Plan ===");
+    Console.Write("Enter study subject/topic (Enter for all eligible): ");
+    string? topic = Console.ReadLine()?.Trim() ?? "";
+
+    Console.WriteLine("Choose difficulty level:");
+    Console.WriteLine("1. Beginner (min year 1990, 4 hrs/week)");
+    Console.WriteLine("2. Intermediate (min year 2005, 8 hrs/week)");
+    Console.WriteLine("3. Advanced (min year 2015, 12 hrs/week)");
+    Console.Write("Choice: ");
+    string? diffChoice = Console.ReadLine();
+
+    var difficulty = diffChoice switch
+    {
+        "1" => StudyPlanDifficulty.Beginner,
+        "3" => StudyPlanDifficulty.Advanced,
+        _ => StudyPlanDifficulty.Intermediate
+    };
+
+    Console.Write("Enter target duration in weeks (e.g. 4): ");
+    if (!int.TryParse(Console.ReadLine(), out int weeks) || weeks <= 0)
+    {
+        weeks = 4;
+    }
+
+    var result = StudyPlanWorkflow.GenerateStudyPlanResult(books, topic, difficulty, weeks, maxBooksPerAuthor: 2);
+    if (result is Result<StudyPlan, DomainError>.Failure failure)
+    {
+        Console.WriteLine($"[WORKFLOW 2 REJECTED]: {failure.Error}");
+        return;
+    }
+
+    var plan = ((Result<StudyPlan, DomainError>.Success)result).Value;
+    Console.WriteLine(ReportExporter.FormatStudyPlan(plan));
+}
+
+static void RunWorkflow3LoanReservation(IEnumerable<Book> books)
+{
+    Console.WriteLine("=== Workflow 3: Request Academic Book Loan / Reservation ===");
+    Console.Write("Enter student ID (e.g. ST-2026-001): ");
+    string? studentId = Console.ReadLine();
+    if (string.IsNullOrWhiteSpace(studentId)) studentId = "ST-2026-DEFAULT";
+
+    Console.WriteLine("Choose student tier:");
+    Console.WriteLine("1. Standard (Max 2 books, max 4 weeks)");
+    Console.WriteLine("2. Honors (Max 4 books, max 8 weeks)");
+    Console.WriteLine("3. Researcher (Max 8 books, max 16 weeks)");
+    Console.Write("Choice: ");
+    string? tierChoice = Console.ReadLine();
+
+    var tier = tierChoice switch
+    {
+        "2" => BorrowerTier.Honors,
+        "3" => BorrowerTier.Researcher,
+        _ => BorrowerTier.Standard
+    };
+
+    var catalogList = books.ToList();
+    Console.WriteLine("\nAvailable catalog books to request:");
+    for (int i = 0; i < Math.Min(catalogList.Count, 6); i++)
+    {
+        Console.WriteLine($"  - Key: '{catalogList[i].Key}' -> Title: '{catalogList[i].Title}'");
+    }
+
+    Console.Write("\nEnter book keys separated by comma: ");
+    string? rawKeys = Console.ReadLine();
+    var keys = (rawKeys ?? "")
+        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+    if (keys.Length == 0)
+    {
+        keys = catalogList.Take(2).Select(b => b.Key).ToArray();
+        Console.WriteLine($"Defaulting to keys: {string.Join(", ", keys)}");
+    }
+
+    Console.Write("Enter loan duration in weeks: ");
+    if (!int.TryParse(Console.ReadLine(), out int weeks) || weeks <= 0)
+    {
+        weeks = 2;
+    }
+
+    var draftResult = LoanWorkflow.CreateDraft(studentId, tier, keys, weeks);
+    if (draftResult is Result<LoanState.Draft, DomainError>.Failure draftFail)
+    {
+        Console.WriteLine($"[DRAFT REJECTED]: {draftFail.Error}");
+        return;
+    }
+    var draft = ((Result<LoanState.Draft, DomainError>.Success)draftResult).Value;
+    Console.WriteLine("[Step 1] Draft Loan Created Successfully.");
+
+    var validateResult = LoanWorkflow.ValidateDraft(draft, catalogList, LoanWorkflow.StandardFeePolicy);
+    if (validateResult is Result<LoanState.Validated, DomainError>.Failure valFail)
+    {
+        Console.WriteLine($"[VALIDATION REJECTED]: {valFail.Error}");
+        return;
+    }
+    var validated = ((Result<LoanState.Validated, DomainError>.Success)validateResult).Value;
+    Console.WriteLine($"[Step 2] Loan Validated: {validated.Books.Length} book(s) verified against tier quotas.");
+
+    var approveResult = LoanWorkflow.ApproveLoan(validated);
+    if (approveResult is Result<LoanState.Approved, DomainError>.Failure appFail)
+    {
+        Console.WriteLine($"[APPROVAL REJECTED]: {appFail.Error}");
+        return;
+    }
+    var approved = ((Result<LoanState.Approved, DomainError>.Success)approveResult).Value;
+    Console.WriteLine("\n[Step 3] Loan Approved:");
+    Console.WriteLine(ReportExporter.FormatLoanAgreement(approved));
 }
 
 static void RunAuthorReport(IEnumerable<Book> books, int minYear)
@@ -191,82 +358,84 @@ static void RunConfiguredCurriedComparison(IEnumerable<Book> books, int minYear)
     PrintBooks.Print("Configuration 2: Recency-Biased (EditionWeight: 0.1, RecencyWeight: 2.5)", recRecommendations);
 }
 
-static async Task RunExportReportsAsync(IEnumerable<Book> books, int minYear)
+static async Task RunExportAllArtifactsAsync(IEnumerable<Book> books, int minYear)
 {
     string outDir = Path.Combine(AppContext.BaseDirectory, "reports");
     string authorPath = Path.Combine(outDir, "author_statistics_report.txt");
     string priorityPath = Path.Combine(outDir, "priority_native_report.txt");
+    string studyPlanPath = Path.Combine(outDir, "sample_study_plan.txt");
+    string loanPath = Path.Combine(outDir, "sample_loan_agreement.txt");
 
     var authorData = LinqReports.GenerateAuthorReport(books, minYear);
     var authorText = ReportExporter.FormatAuthorReport(authorData);
     var authorResult = await ReportExporter.ExportReportAsync(authorPath, authorText);
-
-    if (authorResult is Result<string, DomainError>.Success s1)
-    {
-        Console.WriteLine($"[OK] Exported Author Report to: {s1.Value}");
-    }
-    else if (authorResult is Result<string, DomainError>.Failure f1)
-    {
-        Console.WriteLine($"[FAILED] Exporting Author Report: {f1.Error}");
-    }
+    Console.WriteLine(authorResult.IsSuccess ? $"[OK] Exported: {authorPath}" : "[FAILED] Author Report");
 
     var (priorityItems, decades) = LinqReports.GeneratePriorityReport(
         books, minYear, CurriedScoring.PopularityBiasedScorer);
     var priorityText = ReportExporter.FormatPriorityReport(priorityItems, decades);
     var priorityResult = await ReportExporter.ExportReportAsync(priorityPath, priorityText);
+    Console.WriteLine(priorityResult.IsSuccess ? $"[OK] Exported: {priorityPath}" : "[FAILED] Priority Report");
 
-    if (priorityResult is Result<string, DomainError>.Success s2)
+    var planResult = StudyPlanWorkflow.GenerateStudyPlanResult(books, "", StudyPlanDifficulty.Intermediate, 4);
+    if (planResult is Result<StudyPlan, DomainError>.Success sPlan)
     {
-        Console.WriteLine($"[OK] Exported Priority Report to: {s2.Value}");
+        var planExport = await ReportExporter.ExportStudyPlanAsync(studyPlanPath, sPlan.Value);
+        Console.WriteLine(planExport.IsSuccess ? $"[OK] Exported: {studyPlanPath}" : "[FAILED] Study Plan");
     }
-    else if (priorityResult is Result<string, DomainError>.Failure f2)
-    {
-        Console.WriteLine($"[FAILED] Exporting Priority Report: {f2.Error}");
-    }
-}
 
-static void RunOriginalWorkflowMenu(IEnumerable<Book> books, int minYear)
-{
-    Console.WriteLine("==============================");
-    Console.WriteLine("Choose ranking policy:");
-    Console.WriteLine("1. Popularity");
-    Console.WriteLine("2. Recency");
-    Console.WriteLine("3. Both (compare)");
-    Console.Write("Enter your choice: ");
-    string? policyChoice = Console.ReadLine();
-    Console.WriteLine("==============================");
-
-    switch (policyChoice)
+    var catalogList = books.ToList();
+    var draftResult = LoanWorkflow.CreateDraft("ST-2026-EXPORT", BorrowerTier.Honors, catalogList.Take(2).Select(b => b.Key), 4);
+    if (draftResult is Result<LoanState.Draft, DomainError>.Success sDraft)
     {
-        case "1":
-            RunWorkflow(books, minYear, Policies.Popularity, "Popularity");
-            break;
-        case "2":
-            RunWorkflow(books, minYear, Policies.Recency, "Recency");
-            break;
-        case "3":
-            RunWorkflow(books, minYear, Policies.Popularity, "Popularity");
-            RunWorkflow(books, minYear, Policies.Recency, "Recency");
-            break;
-        default:
-            Console.WriteLine("Invalid choice.");
-            break;
+        var valResult = LoanWorkflow.ValidateDraft(sDraft.Value, catalogList);
+        if (valResult is Result<LoanState.Validated, DomainError>.Success sVal)
+        {
+            var appResult = LoanWorkflow.ApproveLoan(sVal.Value);
+            if (appResult is Result<LoanState.Approved, DomainError>.Success sApp)
+            {
+                var loanExport = await ReportExporter.ExportLoanAgreementAsync(loanPath, sApp.Value);
+                Console.WriteLine(loanExport.IsSuccess ? $"[OK] Exported: {loanPath}" : "[FAILED] Loan Agreement");
+            }
+        }
     }
 }
 
-static void RunWorkflow(
-    IEnumerable<Book> books,
-    int minimumYear,
-    Func<Book, double> scoringPolicy,
-    string policyName)
+static async Task RunFullCapstoneDemonstration(IEnumerable<Book> books, int minYear)
 {
-    var result = BookPipeline.FindResourcesResult(books, minimumYear, scoringPolicy);
-    if (result is Result<IReadOnlyList<Recommendation>, DomainError>.Failure failure)
+    Console.WriteLine("\n========================================================");
+    Console.WriteLine(">>> RUNNING FULL FINAL PROJECT DEMONSTRATION <<<");
+    Console.WriteLine("========================================================\n");
+
+    Console.WriteLine("--> WORKFLOW 1: Resource Discovery & Ranking");
+    RunWorkflow1(books, minYear, CurriedScoring.PopularityBiasedScorer, "Curried Popularity");
+
+    Console.WriteLine("\n--> WORKFLOW 2: Personalized Study Plan Generation");
+    var planRes = StudyPlanWorkflow.GenerateStudyPlanResult(books, "", StudyPlanDifficulty.Intermediate, 3);
+    if (planRes is Result<StudyPlan, DomainError>.Success sPlan)
+        Console.WriteLine(ReportExporter.FormatStudyPlan(sPlan.Value));
+
+    Console.WriteLine("\n--> WORKFLOW 3: Safe Multi-Stage Book Loan");
+    var catalog = books.ToList();
+    var draftRes = LoanWorkflow.CreateDraft("ST-DEFENSE-01", BorrowerTier.Honors, catalog.Take(2).Select(b => b.Key), 3);
+    if (draftRes is Result<LoanState.Draft, DomainError>.Success sDraft)
     {
-        Console.WriteLine($"Workflow failed: {failure.Error}");
-        return;
+        var valRes = LoanWorkflow.ValidateDraft(sDraft.Value, catalog);
+        if (valRes is Result<LoanState.Validated, DomainError>.Success sVal)
+        {
+            var appRes = LoanWorkflow.ApproveLoan(sVal.Value);
+            if (appRes is Result<LoanState.Approved, DomainError>.Success sApp)
+                Console.WriteLine(ReportExporter.FormatLoanAgreement(sApp.Value));
+        }
     }
 
-    var recommendations = ((Result<IReadOnlyList<Recommendation>, DomainError>.Success)result).Value;
-    PrintBooks.Print(policyName, recommendations);
+    Console.WriteLine("\n--> LINQ REPORT 1: Author Publishing & Edition Reach");
+    RunAuthorReport(books, minYear);
+
+    Console.WriteLine("\n--> LINQ REPORT 2: Curried & Native Priority Dynamics");
+    RunPriorityReport(books, minYear);
+
+    Console.WriteLine("\n--> SAFE FILE EXPORT:");
+    await RunExportAllArtifactsAsync(books, minYear);
+    Console.WriteLine("\n>>> DEMONSTRATION COMPLETED SUCCESSFULLY <<<");
 }

@@ -60,7 +60,6 @@ public static class BookParser
         return true;
     }
 
-
     public static (ImmutableArray<Book> Valid, ImmutableArray<string> Errors) ParseAll(IEnumerable<BookDto>? dtos)
     {
         ArgumentNullException.ThrowIfNull(dtos);

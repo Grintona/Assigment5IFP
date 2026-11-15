@@ -10,7 +10,6 @@ public static class NativeAdapter
     private const int MaxRealisticBookAge = 1000;
     private const int MaxRealisticEditions = 50000;
 
-
     public static Result<ulong, string> CalculatePrioritySafe(int editionCount, int ratingsCount, int bookAge)
     {
 

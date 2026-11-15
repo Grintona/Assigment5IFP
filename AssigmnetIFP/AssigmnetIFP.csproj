@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -7,16 +7,20 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <Target Name="BuildNativeLinux" BeforeTargets="BeforeBuild" Condition="$([MSBuild]::IsOSPlatform('Linux')) And !Exists('..\native\linux\libcalc.so')">
+    <Exec Command="make -C ../native/linux" ContinueOnError="true" />
+  </Target>
+
   <ItemGroup>
     <None Include="Data\*.json" CopyToOutputDirectory="PreserveNewest" />
-   <None Include="..\native\linux\libcalc.so" Condition="Exists('..\native\linux\libcalc.so')">
-    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    <Link>libcalc.so</Link>
-  </None>
-  <None Include="..\native\windows\libcalc.dll" Condition="Exists('..\native\windows\libcalc.dll')">
-    <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    <Link>libcalc.dll</Link>
-  </None>
+    <None Include="..\native\linux\libcalc.so" Condition="Exists('..\native\linux\libcalc.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libcalc.so</Link>
+    </None>
+    <None Include="..\native\windows\libcalc.dll" Condition="Exists('..\native\windows\libcalc.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>libcalc.dll</Link>
+    </None>
   </ItemGroup>
 
 </Project>

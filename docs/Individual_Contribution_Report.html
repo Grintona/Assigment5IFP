@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Individual Contribution Report - Mikhail Gulyayev (IT-2512)</title>
+<style>
+    body { font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif; line-height: 1.6; color: #222; margin: 40px; }
+    h1 { color: #1a365d; border-bottom: 2px solid #2b6cb0; padding-bottom: 8px; margin-top: 0; }
+    h2 { color: #2b6cb0; border-bottom: 1px solid #cbd5e0; padding-bottom: 5px; margin-top: 30px; }
+    h3 { color: #2d3748; margin-top: 20px; }
+    table { border-collapse: collapse; width: 100%; margin: 15px 0; font-size: 13px; }
+    th, td { border: 1px solid #cbd5e0; padding: 8px 12px; text-align: left; }
+    th { background-color: #edf2f7; color: #2d3748; }
+    tr:nth-child(even) { background-color: #f7fafc; }
+    code { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; background-color: #edf2f7; padding: 2px 5px; border-radius: 3px; font-size: 12px; }
+    pre { font-family: "DejaVu Sans Mono", "Liberation Mono", monospace; background-color: #f7fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 4px; overflow-x: auto; font-size: 12px; line-height: 1.4; }
+    .callout { background-color: #ebf8ff; border-left: 4px solid #3182ce; padding: 12px; margin: 15px 0; border-radius: 0 4px 4px 0; }
+</style>
+</head>
+<body>
+
+<h1>Individual Contribution Report</h1>
+<h3>Introduction to Functional Programming | Academic Year 2026–2027</h3>
+
+<div class="callout">
+<strong>Student Name:</strong> Mikhail Gulyayev<br>
+<strong>Academic Group:</strong> IT-2512<br>
+<strong>Project Title:</strong> Academic Study Resource & Lending Management System<br>
+<strong>Team Members:</strong> None (Individual Project)<br>
+<strong>Primary Responsibilities:</strong> Full lifecycle architecture, immutable domain modeling, functional core design, pipelines, higher-order functions, safe state machines, Option/Result error handling, LINQ reports, deferred execution, safe stream disposal, native assembly integration, and automated testing suite.
+</div>
+
+<h2>1. Personal Contribution Overview</h2>
+<p>
+As the sole author of this project, I designed and implemented 100% of the codebase, test suites, and documentation. I structured the system into a distinct, mathematically pure functional core decoupled from side-effecting I/O, built three full end-to-end workflows, implemented two advanced LINQ reports, and engineered a safe multi-stage state machine that guarantees temporal correctness at compile- and runtime.
+</p>
+
+<h2>2. Detailed Implementation Contributions & Functional Techniques</h2>
+
+<h3>Contribution 1: Functional Primitives & Total Error Handling</h3>
+<ul>
+    <li><strong>Files & Types:</strong> <code>AssigmnetIFP/Models/Option.cs</code> (<code>Option&lt;T&gt;</code>, <code>Some</code>, <code>None</code>), <code>AssigmnetIFP/Models/Result.cs</code> (<code>Result&lt;T, E&gt;</code>, <code>Success</code>, <code>Failure</code>), <code>AssigmnetIFP/Models/DomainError.cs</code>.</li>
+    <li><strong>Purpose & Mechanism:</strong> Eliminates runtime null reference exceptions and unhandled domain crashes. <code>Option&lt;T&gt;</code> models presence or absence of resources (such as catalog lookups in <code>BookPipeline.FindBookOption</code>). <code>Result&lt;T, E&gt;</code> represents fallible business computations with monadic <code>Map</code> and <code>Bind</code> operators that automatically short-circuit subsequent stages upon failure.</li>
+    <li><strong>Integration:</strong> Integrated throughout all three workflows to validate inputs, safely look up catalog items, and ensure that malformed inputs never partially corrupt application state.</li>
+</ul>
+
+<h3>Contribution 2: Workflow 1 — Pure Transformation Pipeline & Configurable Scoring</h3>
+<ul>
+    <li><strong>Files & Methods:</strong> <code>AssigmnetIFP/Services/BookPipeline.cs</code> (<code>FilterBooks</code>, <code>ScoreBooks</code>, <code>RankBooks</code>, <code>FindResourcesResult</code>), <code>AssigmnetIFP/Services/CurriedScoring.cs</code> (<code>CreateScore</code>, <code>PopularityBiasedScorer</code>, <code>RecencyBiasedScorer</code>).</li>
+    <li><strong>Purpose & Mechanism:</strong> Implements a 3-stage pure pipeline (Filter -&gt; Score -&gt; Rank with deterministic tie-breaking). Leverages <strong>currying and partial application</strong> (<code>ScoringWeights -&gt; (Book -&gt; double)</code>) to produce configurable scoring policies that can be passed dynamically without mutable state.</li>
+    <li><strong>Integration:</strong> Serves as the primary literature recommendation engine, supporting both live API data and local JSON files.</li>
+</ul>
+
+<h3>Contribution 3: Workflow 2 — Adaptive Study Plan Generator & Higher-Order Constraints</h3>
+<ul>
+    <li><strong>Files & Methods:</strong> <code>AssigmnetIFP/Services/StudyPlanWorkflow.cs</code> (<code>FilterCurriculumResources</code>, <code>EnforceAuthorDiversity</code>, <code>ScheduleModules</code>, <code>GenerateStudyPlanResult</code>), <code>AssigmnetIFP/Models/StudyPlan.cs</code>.</li>
+    <li><strong>Purpose & Mechanism:</strong> Synthesizes a structured study curriculum. Employs a <strong>higher-order function</strong> (<code>EnforceAuthorDiversity</code>) accepting an author selector delegate to balance author representation across modules. Utilizes <strong>pattern matching with domain switch expressions</strong> to assign study hours and learning objectives based on <code>StudyPlanDifficulty</code> (Beginner: 4h, Intermediate: 8h, Advanced: 12h).</li>
+    <li><strong>Integration:</strong> Generates immutable <code>StudyPlan</code> objects that can be directly displayed or exported via asynchronous streams.</li>
+</ul>
+
+<h3>Contribution 4: Workflow 3 — Multi-Stage Safe Loan State Machine</h3>
+<ul>
+    <li><strong>Files & Methods:</strong> <code>AssigmnetIFP/Services/LoanWorkflow.cs</code> (<code>CreateDraft</code>, <code>ValidateDraft</code>, <code>ApproveLoan</code>), <code>AssigmnetIFP/Models/BookLoan.cs</code> (<code>LoanState</code>, <code>BorrowerTier</code>).</li>
+    <li><strong>Purpose & Mechanism:</strong> Resolves temporal coupling and prevents invalid business sequences through a closed algebraic state machine (<code>Draft -&gt; Validated -&gt; Approved</code>). Uses pattern matching on <code>BorrowerTier</code> to enforce book quotas (Standard: 2, Honors: 4, Researcher: 8) and resolves book availability via <code>Option&lt;Book&gt;</code>. Rejects attempts to approve unvalidated drafts or re-approve already active loans.</li>
+    <li><strong>Integration:</strong> Ensures library lending rules are inviolable before emitting an approved loan agreement.</li>
+</ul>
+
+<h3>Contribution 5: LINQ Analytics, Custom Extensions & Deferred Execution</h3>
+<ul>
+    <li><strong>Files & Methods:</strong> <code>AssigmnetIFP/Services/BookExtensions.cs</code> (<code>GetAge</code>, <code>WithMinimumEditions</code>), <code>AssigmnetIFP/Services/LinqReports.cs</code> (<code>GenerateAuthorReport</code>, <code>GeneratePriorityReport</code>), <code>AssigmnetIFP/Services/DeferredExecution.cs</code> (<code>StreamScoreBooks</code>), <code>AssigmnetIFP/Services/ReportExporter.cs</code> (<code>ExportReportAsync</code>, <code>StreamLines</code>).</li>
+    <li><strong>Purpose & Mechanism:</strong> Implements custom extension methods for expressive dot-syntax. Builds two analytical LINQ reports featuring grouping, multi-level aggregations (<code>Count</code>, <code>Sum</code>, <code>Average</code>, <code>Min</code>, <code>Max</code>), and deterministic tie-breaker sorting. Implements lazy evaluation using <code>yield return</code> and guarantees resource disposal via <code>await using</code> on FileStream/StreamWriter boundaries.</li>
+</ul>
+
+<h3>Contribution 6: Native Assembly Integration</h3>
+<ul>
+    <li><strong>Files & Methods:</strong> <code>native/linux/library_linux.asm</code>, <code>AssigmnetIFP/NativeLibrary/NativeBridge.cs</code>, <code>AssigmnetIFP/NativeLibrary/NativeAdapter.cs</code>.</li>
+    <li><strong>Purpose & Mechanism:</strong> Wrote x86-64 NASM assembly routine <code>calculate_book_priority</code> following the System V AMD64 ABI. Created a safe C# adapter with boundary range validation and custom DLL import resolution.</li>
+</ul>
+
+<h2>3. Automated Tests Authored & Results</h2>
+<p>
+I authored the complete suite of <strong>62 automated unit and integration tests</strong> across <code>UnitTest1.cs</code>, <code>Assignment8Tests.cs</code>, and <code>FinalProjectTests.cs</code> using xUnit:
+</p>
+<table>
+    <thead>
+        <tr>
+            <th>Test Class / Area</th>
+            <th>Count</th>
+            <th>Tested Capabilities</th>
+            <th>Result</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td><code>FinalProjectTests</code></td>
+            <td>17</td>
+            <td>Option (Map/Bind/Match), StudyPlan difficulty pattern matching, author diversity constraints, Loan 3-stage transitions, tier quota enforcement, invalid transition rejection, and safe plan export.</td>
+            <td><strong>17 Passed (0 Failed)</strong></td>
+        </tr>
+        <tr>
+            <td><code>Assignment8Tests</code></td>
+            <td>16</td>
+            <td>LINQ reports (Author & Priority), custom extensions (<code>GetAge</code>, <code>WithMinimumEditions</code>), curried scorer divergence, deferred execution probe counts, safe stream disposal, and native call verification.</td>
+            <td><strong>16 Passed (0 Failed)</strong></td>
+        </tr>
+        <tr>
+            <td><code>UnitTest1 (PipelineTests)</code></td>
+            <td>29</td>
+            <td>Result Map/Bind, 3-stage pure pipeline, boundary thresholds, missing input rejections, operational file failure boundaries, and temporal factory constraints.</td>
+            <td><strong>29 Passed (0 Failed)</strong></td>
+        </tr>
+    </tbody>
+</table>
+
+<h2>4. Technical Difficulty Resolved / Defect Fixed</h2>
+<div class="callout">
+<strong>Problem:</strong> In a multi-stage workflow, a caller could easily introduce temporal coupling bugs by invoking operations in an illegitimate order (e.g. attempting to approve a book loan before validating student quotas or catalog availability, or re-approving an already active loan). Furthermore, standard exception-driven validation frequently obscured domain failures and broke pipeline purity.<br><br>
+<strong>Functional Solution:</strong> I solved this by modeling the loan lifecycle as a closed algebraic data hierarchy (<code>abstract record LoanState</code> with <code>Draft</code>, <code>Validated</code>, <code>Approved</code>, and <code>Rejected</code>) coupled with <code>Result&lt;T, DomainError&gt;</code> transitions. The constructor of <code>Draft</code> validates basic syntax, <code>ValidateDraft</code> verifies quotas using pattern matching on <code>BorrowerTier</code>, and <code>ApproveLoan</code> uses an exhaustive switch expression that accepts only <code>Validated</code> states. If a caller passes a <code>Draft</code> or an already <code>Approved</code> loan into <code>ApproveLoan</code>, the compiler and runtime cleanly return a structured <code>Result.Failure("InvalidStateTransition")</code> without mutating state or throwing unhandled exceptions.
+</div>
+
+</body>
+</html>

@@ -31,10 +31,6 @@ public class Assignment8Tests
         MakeBook("No Year",    null, 8,  "/noyear",new[] { "Author Four" }),
     };
 
-    // ==========================================
-    // 1. EXTENSIONS
-    // ==========================================
-
     [Fact]
     public void BookExtensions_GetAge_CalculatesCorrectAgeAndHandlesEdgeCases()
     {
@@ -66,19 +62,11 @@ public class Assignment8Tests
         Assert.Throws<ArgumentNullException>(() => ((IEnumerable<Book>)null!).WithMinimumEditions(5));
     }
 
-    // ==========================================
-    // 2. LINQ REPORTS
-    // ==========================================
-
     [Fact]
     public void AuthorReport_ComputesCorrectAggregatesAndDeterministicOrdering()
     {
         var books = SampleBooks();
 
-        // minYear: 2000. Filtered: Alpha (2010, 20), Beta (2015, 10), Gamma (2020, 10).
-        // Author One: Alpha (20) + Beta (10) = 30 editions, 2 books, min 2010, max 2015.
-        // Author Two: Alpha (20) + Gamma (10) = 30 editions, 2 books, min 2010, max 2020.
-        // Tied editions (30 vs 30): tie broken by Author ascending ("Author One" < "Author Two").
         var report = LinqReports.GenerateAuthorReport(books, 2000);
 
         Assert.Equal(2, report.Count);
@@ -117,14 +105,11 @@ public class Assignment8Tests
         var (items, decades) = LinqReports.GeneratePriorityReport(
             books, 2000, CurriedScoring.PopularityBiasedScorer, referenceYear: 2026);
 
-        // Alpha Book: 20 editions, year 2010 (age = 16).
-        // Native: (20 * 10) + (100 / 2) - 16 = 200 + 50 - 16 = 234.
         var alpha = items.Single(i => i.Title == "Alpha Book");
         Assert.Equal(234UL, alpha.NativePriority);
         Assert.Equal(2010, alpha.PublishYear);
         Assert.Equal(2010, alpha.Decade);
 
-        // Check decades grouping
         Assert.Contains(decades, d => d.Decade == 2010);
         Assert.Contains(decades, d => d.Decade == 2020);
     }
@@ -137,7 +122,6 @@ public class Assignment8Tests
         Assert.Empty(emptyItems);
         Assert.Empty(emptyDecades);
 
-        // Tied scores: "Beta Book" and "Gamma Book" with identical score
         var tiedBooks = new List<Book>
         {
             MakeBook("Zeta Tied", 2015, 10, "/zeta"),
@@ -153,10 +137,6 @@ public class Assignment8Tests
         Assert.Equal(1, tiedReport[0].Rank);
         Assert.Equal(2, tiedReport[1].Rank);
     }
-
-    // ==========================================
-    // 3. CURRYING & CONFIGURED FUNCTIONS
-    // ==========================================
 
     [Fact]
     public void CurriedScoring_TwoConfigurations_ProduceDifferentResultsOnSameInput()
@@ -174,23 +154,16 @@ public class Assignment8Tests
         double oldRecScore = recScorer(oldPopular);
         double recentRecScore = recScorer(recentNiche);
 
-        // Under popularity bias: old classic with 100 editions scores higher
         Assert.True(oldPopScore > recentPopScore);
 
-        // Under recency bias: recent tech with 2025 publication scores higher
         Assert.True(recentRecScore > oldRecScore);
 
-        // Rank order is inverted on the exact same dataset
         var popRank = BookPipeline.FindResources(testSet, 1900, popScorer);
         var recRank = BookPipeline.FindResources(testSet, 1900, recScorer);
 
         Assert.Equal("Old Classic", popRank[0].Book.Title);
         Assert.Equal("Recent Tech", recRank[0].Book.Title);
     }
-
-    // ==========================================
-    // 4. DEFERRED EXECUTION
-    // ==========================================
 
     [Fact]
     public void DeferredExecution_DemonstratesLazyEvaluationAndSnapshotReuse()
@@ -204,11 +177,9 @@ public class Assignment8Tests
             return b.EditionCount;
         }
 
-        // 1. Creation does NOT execute body
         var lazyEnumerable = DeferredExecution.StreamScoreBooks(books, TestScorer);
         Assert.Equal(0, evaluationCount);
 
-        // 2. Iterating 1 item triggers only 1 evaluation
         using (var enumerator = lazyEnumerable.GetEnumerator())
         {
             Assert.Equal(0, evaluationCount);
@@ -217,24 +188,18 @@ public class Assignment8Tests
             Assert.Equal(books[0].Title, enumerator.Current.Book.Title);
         }
 
-        // 3. Materialization point creates a stable snapshot
         evaluationCount = 0;
         var snapshot = lazyEnumerable.ToList();
         Assert.Equal(books.Count, evaluationCount);
 
-        // 4. Repeated enumeration of the snapshot performs 0 additional evaluations
         for (int i = 0; i < 3; i++)
         {
             var count = snapshot.Count;
             var titles = snapshot.Select(s => s.Book.Title).ToArray();
             Assert.Equal(books.Count, titles.Length);
-            Assert.Equal(books.Count, evaluationCount); // unchanged!
+            Assert.Equal(books.Count, evaluationCount);
         }
     }
-
-    // ==========================================
-    // 5. RESOURCE DISPOSAL
-    // ==========================================
 
     [Fact]
     public void ResourceDisposal_StreamLines_ReleasesFileLockOnEarlyStop()
@@ -244,12 +209,11 @@ public class Assignment8Tests
 
         try
         {
-            // Early stop with Take(1)
+
             var firstLine = ReportExporter.StreamLines(tempPath).Take(1).ToList();
             Assert.Single(firstLine);
             Assert.Equal("Line 1", firstLine[0]);
 
-            // If the stream were not disposed upon early stop, opening in exclusive mode would throw IOException
             using var exclusiveStream = new FileStream(tempPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
             Assert.NotNull(exclusiveStream);
         }
@@ -277,7 +241,6 @@ public class Assignment8Tests
             string readBack = await File.ReadAllTextAsync(tempPath);
             Assert.Equal(content, readBack);
 
-            // Error boundary: empty path
             var invalidResult = await ReportExporter.ExportReportAsync("", content);
             Assert.False(invalidResult.IsSuccess);
             var failure = Assert.IsType<Result<string, DomainError>.Failure>(invalidResult);
@@ -291,10 +254,6 @@ public class Assignment8Tests
             }
         }
     }
-
-    // ==========================================
-    // 6. NATIVE INTEGRATION & ADAPTER ERROR BOUNDARIES
-    // ==========================================
 
     [Theory]
     [InlineData(-1, 10, 5, "Invalid edition count")]
@@ -312,10 +271,6 @@ public class Assignment8Tests
         Assert.Contains(expectedErrorSubstring, failure.Error);
     }
 
-    // ==========================================
-    // 7. COMPLETE WORKFLOW INTEGRATION
-    // ==========================================
-
     [Fact]
     public void CompleteWorkflow_IntegratesApiDataWithReportsAndNativeCall()
     {
@@ -330,11 +285,9 @@ public class Assignment8Tests
         Assert.Empty(errors);
         Assert.Equal(3, books.Length);
 
-        // Run author report
         var authorReport = LinqReports.GenerateAuthorReport(books, 2000);
         Assert.Equal(2, authorReport.Count);
 
-        // Run priority report
         var (priorityReport, decades) = LinqReports.GeneratePriorityReport(
             books, 2000, CurriedScoring.PopularityBiasedScorer, referenceYear: 2026);
 

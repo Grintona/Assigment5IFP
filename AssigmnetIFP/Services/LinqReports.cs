@@ -29,19 +29,7 @@ public sealed record DecadeSummary(
 
 public static class LinqReports
 {
-    /// <summary>
-    /// Report 1: Author Publishing & Edition Aggregation Report.
-    /// Purpose: Analyzes author productivity and total edition reach.
-    /// Filters: Books with first publish year >= minYear, filtered using custom extension WithMinimumEditions.
-    /// Query stages:
-    /// 1. WithMinimumEditions (custom extension)
-    /// 2. Where (year filter and non-empty authors)
-    /// 3. SelectMany (flatten authors to author-book pairs)
-    /// 4. GroupBy (group by author name)
-    /// 5. Select (aggregate Count, Sum of editions, Min year, Max year)
-    /// 6. OrderByDescending (primary: TotalEditions)
-    /// 7. ThenBy (tie-breaker: Author name ordinal)
-    /// </summary>
+
     public static IReadOnlyList<AuthorReportItem> GenerateAuthorReport(
         IEnumerable<Book> books,
         int minimumYear,
@@ -65,18 +53,6 @@ public static class LinqReports
             .ToList();
     }
 
-    /// <summary>
-    /// Report 2: Curried & Native Priority Ranking Report.
-    /// Purpose: Evaluates candidate study books combining a curried functional score
-    /// and a low-level native assembly priority score, with decade-level aggregation.
-    /// Filters: Books with first publish year >= minYear.
-    /// Query stages:
-    /// 1. Where (year filter)
-    /// 2. Select (calculates age via Book.GetAge(), curried score, and calls NativeAdapter.CalculatePrioritySafe)
-    /// 3. OrderByDescending (primary: CurriedScore)
-    /// 4. ThenBy (tie-breaker: Title ordinal)
-    /// 5. Select with index (assigns Rank)
-    /// </summary>
     public static (IReadOnlyList<BookPriorityReportItem> Items, IReadOnlyList<DecadeSummary> DecadeSummaries) GeneratePriorityReport(
         IEnumerable<Book> books,
         int minimumYear,
@@ -91,8 +67,7 @@ public static class LinqReports
             .Select(b =>
             {
                 int age = b.GetAge(referenceYear);
-                // Call real native assembly library through adapter
-                // ratingsCount estimated as editions * 5
+
                 int ratingsCount = Math.Max(0, b.EditionCount * 5);
                 var nativeResult = NativeAdapter.CalculatePrioritySafe(b.EditionCount, ratingsCount, age);
                 ulong nativeScore = nativeResult is Result<ulong, string>.Success success ? success.Value : 0UL;

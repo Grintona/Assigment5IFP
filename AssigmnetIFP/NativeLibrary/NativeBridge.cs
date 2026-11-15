@@ -3,7 +3,7 @@ using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-namespace StudyResourceFinder.Native; 
+namespace StudyResourceFinder.Native;
 
 internal static class NativeBridge
 {
@@ -45,7 +45,6 @@ internal static class NativeBridge
 
         return IntPtr.Zero;
     }
-
 
     [DllImport(LibraryName, EntryPoint = "calculate_book_priority")]
     internal static extern ulong CalculateBookPriority(ulong editionCount, ulong ratingsCount, ulong bookAge);

@@ -6,10 +6,7 @@ namespace StudyResourceFinder.Services;
 
 public static class DeferredExecution
 {
-    /// <summary>
-    /// Evaluates scores lazily using deferred execution (yield return).
-    /// Processing is postponed until elements are iterated.
-    /// </summary>
+
     public static IEnumerable<ScoredBook> StreamScoreBooks(
         IEnumerable<Book> books,
         Func<Book, double> scoringPolicy)

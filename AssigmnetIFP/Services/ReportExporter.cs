@@ -9,10 +9,7 @@ namespace StudyResourceFinder.Services;
 
 public static class ReportExporter
 {
-    /// <summary>
-    /// Safely writes report text content to a file using asynchronous stream disposal (await using).
-    /// Releases the file handle and stream on both success and exception paths.
-    /// </summary>
+
     public static async Task<Result<string, DomainError>> ExportReportAsync(string filePath, string content)
     {
         if (string.IsNullOrWhiteSpace(filePath))
@@ -29,7 +26,6 @@ public static class ReportExporter
                 Directory.CreateDirectory(dir);
             }
 
-            // Explicit FileStream and StreamWriter creation with await using for safe asynchronous disposal
             await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, useAsync: true);
             await using var writer = new StreamWriter(fileStream, Encoding.UTF8);
             await writer.WriteAsync(content);
@@ -53,11 +49,6 @@ public static class ReportExporter
         }
     }
 
-    /// <summary>
-    /// Yields lines from a file while keeping the resource bounded.
-    /// The using blocks guarantee deterministic disposal of both reader and stream upon normal completion,
-    /// exception, or early termination (e.g. Linq Take).
-    /// </summary>
     public static IEnumerable<string> StreamLines(string filePath)
     {
         ArgumentNullException.ThrowIfNull(filePath);
@@ -135,5 +126,59 @@ public static class ReportExporter
         }
         sb.AppendLine("--------------------------------------------------------------------------------");
         return sb.ToString();
+    }
+
+    public static string FormatStudyPlan(StudyPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("=== ACADEMIC STUDY PLAN ===");
+        sb.AppendLine($"Topic: {plan.Topic} | Level: {plan.Difficulty} | Total Hours: {plan.TotalReadingHours}");
+        sb.AppendLine($"Pacing: {plan.RecommendedPacing}");
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine(string.Format("{0,6} | {1,-35} | {2,6} | {3}", "Week", "Book Resource", "Hours", "Objective"));
+        sb.AppendLine("--------------------------------------------------------------------------------");
+
+        foreach (var mod in plan.Modules)
+        {
+            string title = mod.Resource.Title.Length > 35 ? mod.Resource.Title[..32] + "..." : mod.Resource.Title;
+            sb.AppendLine(string.Format("{0,6} | {1,-35} | {2,6} | {3}", mod.WeekNumber, title, mod.WeeklyReadingHours, mod.LearningObjective));
+        }
+
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        return sb.ToString();
+    }
+
+    public static async Task<Result<string, DomainError>> ExportStudyPlanAsync(string filePath, StudyPlan plan)
+    {
+        ArgumentNullException.ThrowIfNull(plan);
+        return await ExportReportAsync(filePath, FormatStudyPlan(plan));
+    }
+
+    public static string FormatLoanAgreement(LoanState.Approved loan)
+    {
+        ArgumentNullException.ThrowIfNull(loan);
+
+        var sb = new StringBuilder();
+        sb.AppendLine("=== ACADEMIC LIBRARY LOAN CONFIRMATION ===");
+        sb.AppendLine($"Loan ID: {loan.LoanId}");
+        sb.AppendLine($"Borrower: Student {loan.StudentId} (Tier: {loan.Tier})");
+        sb.AppendLine($"Due Date: {loan.DueDate:yyyy-MM-dd} | Late Fee Rate: ${loan.DailyLateFee:F2}/day");
+        sb.AppendLine("Issued Resources:");
+        for (int i = 0; i < loan.Books.Length; i++)
+        {
+            var b = loan.Books[i];
+            sb.AppendLine($"  {i + 1}. {b.Title} (Key: {b.Key}, Editions: {b.EditionCount})");
+        }
+        sb.AppendLine("Status: APPROVED (Immutable loan agreement)");
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        return sb.ToString();
+    }
+
+    public static async Task<Result<string, DomainError>> ExportLoanAgreementAsync(string filePath, LoanState.Approved loan)
+    {
+        ArgumentNullException.ThrowIfNull(loan);
+        return await ExportReportAsync(filePath, FormatLoanAgreement(loan));
     }
 }

@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json;
 namespace StudyResourceFinder.Models;
 public record OpenLibraryResponse(
-    
+
     [property: JsonPropertyName("numFound")]
     int NumFound,
 
@@ -11,5 +11,5 @@ public record OpenLibraryResponse(
 
     [property: JsonPropertyName("docs")]
     List<BookDto>? Docs
-    
+
 );

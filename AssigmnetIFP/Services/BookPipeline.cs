@@ -4,6 +4,17 @@ namespace StudyResourceFinder.Services;
 
 public static class BookPipeline
 {
+    public static Option<Book> FindBookOption(IEnumerable<Book>? books, string? key)
+    {
+        if (books is null || string.IsNullOrWhiteSpace(key))
+            return new Option<Book>.None();
+
+        var book = books.FirstOrDefault(candidate => candidate.Key == key);
+        return book is not null
+            ? new Option<Book>.Some(book)
+            : new Option<Book>.None();
+    }
+
     public static Result<Book, DomainError> FindByKey(IEnumerable<Book>? books, string? key)
     {
         if (books is null)
@@ -11,10 +22,8 @@ public static class BookPipeline
         if (string.IsNullOrWhiteSpace(key))
             return Result<Book, DomainError>.Fail(new("MissingLookupKey", "A lookup key is required."));
 
-        var book = books.SingleOrDefault(candidate => candidate.Key == key);
-        return book is null
-            ? Result<Book, DomainError>.Fail(new("BookNotFound", $"No book was found for key '{key}'."))
-            : Result<Book, DomainError>.Ok(book);
+        return FindBookOption(books, key)
+            .ToResult(new DomainError("BookNotFound", $"No book was found for key '{key}'."));
     }
 
     public static Result<IReadOnlyList<Recommendation>, DomainError> FindResourcesResult(

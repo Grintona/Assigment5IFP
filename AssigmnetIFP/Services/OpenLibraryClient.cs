@@ -20,9 +20,9 @@ public class OpenLibraryClient
             }
         string url =
         $"https://openlibrary.org/search.json?q={Uri.EscapeDataString(query)}&limit=10";
-        return await _httpClient.GetStringAsync(url);  
+        return await _httpClient.GetStringAsync(url);
     }
-    
+
 public static async Task<List<BookDto>> LoadFromFile(string path)
 {
     await using var stream = File.OpenRead(path);
