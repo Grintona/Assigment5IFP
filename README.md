@@ -245,24 +245,3 @@ dotnet run --project AssigmnetIFP
 ```
 
 ---
-
-## 8. Oral Defense Guide: What to Demonstrate
-
-When presenting and defending the project:
-
-1. **Demonstrate All 3 Workflows (Option 8):**
-   - Launch application (`dotnet run --project AssigmnetIFP`), select option `2` (local file `Data/books.json`), enter year `2000`, and choose **Option 8** (Full Capstone Demonstration).
-   - Show console output for Workflow 1 (Recommendations), Workflow 2 (Study Plan with weekly modules), and Workflow 3 (Approved loan with student tier and due date).
-2. **Demonstrate Interactive Workflows:**
-   - Run **Option 2** (Workflow 2): Generate a study plan for "Algorithms", choose difficulty `Intermediate` (8 hrs/week) or `Advanced` (12 hrs/week), and show how weekly modules and objectives adapt.
-   - Run **Option 3** (Workflow 3): Demonstrate tier quotas. Attempt to request 3 books under `Standard` tier (max 2 books allowed) and show the structured `BorrowQuotaExceeded` domain failure. Then request 2 books and show successful approval.
-3. **Demonstrate LINQ Reports & Extension Methods:**
-   - Run **Option 4** (Report 1): Show author grouping, count, edition sum, and deterministic tie-breaker sorting. Show calls to `WithMinimumEditions`.
-   - Run **Option 5** (Report 2): Show age calculation (`GetAge`), curried score, real native assembly priority score, and decade summaries.
-4. **Demonstrate Currying & Partial Application (Option 6):**
-   - Show how `PopularityBiasedScorer` and `RecencyBiasedScorer` invert book rankings on the exact same dataset without any mutable state.
-5. **Demonstrate Safe File Export (Option 7):**
-   - Show generated files in `reports/` (`author_statistics_report.txt`, `priority_native_report.txt`, `sample_study_plan.txt`, `sample_loan_agreement.txt`).
-   - Highlight asynchronous stream disposal using `await using`.
-6. **Demonstrate Automated Test Suite:**
-   - Execute `dotnet test Assignment5.slnx` in terminal to confirm all 62 tests pass deterministically.
