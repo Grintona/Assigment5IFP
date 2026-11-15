@@ -16,7 +16,7 @@ Console.WriteLine("    ACADEMIC STUDY RESOURCE & LENDING SYSTEM      ");
 Console.WriteLine("         Final Project (FP 2026-2027)             ");
 Console.WriteLine("==================================================");
 Console.WriteLine("1. Search books via Open Library API");
-Console.WriteLine("2. Load books from a JSON file");
+Console.WriteLine("2. Load books from a JSON file (Offline / Recommended)");
 Console.WriteLine("3. Exit");
 Console.WriteLine("==================================================");
 Console.Write("Choose an option: ");
@@ -84,7 +84,7 @@ catch (HttpRequestException ex)
     Console.WriteLine($"Error fetching data from Open Library API: {ex.Message}");
     return;
 }
-catch (IOException ex)
+catch (IOException ex) 
 {
     Console.WriteLine($"Error reading file: {ex.Message}");
     return;
@@ -105,9 +105,15 @@ catch (ArgumentException ex)
     return;
 }
 
+var parseResult = BookParser.ParseAllResult(dtos);
 var (books, errors) = BookParser.ParseAll(dtos);
+
 Console.WriteLine();
 Console.WriteLine($"Loaded {dtos.Count} records: {books.Length} valid, {errors.Length} rejected.");
+if (parseResult is Result<ImmutableArray<Book>, DomainError>.Success validBooksResult)
+{
+    Console.WriteLine($"Verified {validBooksResult.Value.Length} valid domain records via ParseAllResult.");
+}
 foreach (var error in errors)
 {
     Console.WriteLine($"  [Rejected] {error}");
@@ -126,8 +132,10 @@ while (!exit)
     Console.WriteLine("4. LINQ Report 1: Author Publishing & Edition Reach");
     Console.WriteLine("5. LINQ Report 2: Priority Score & Decade Dynamics");
     Console.WriteLine("6. Compare Configured Scoring Policies (Curried)");
-    Console.WriteLine("7. Export Reports & Artifacts to Files (Safe Disposal)");
-    Console.WriteLine("8. Run Full Capstone Demonstration (All 3 Workflows)");
+    Console.WriteLine("7. Demonstrate Lazy Processing & Deferred Execution (yield return)");
+    Console.WriteLine("8. Catalog Lookup by Key (FindByKey & Option<Book>)");
+    Console.WriteLine("9. Export Reports & Artifacts to Files (Safe Disposal)");
+    Console.WriteLine("10. Run Full Capstone Demonstration (All Constructs)");
     Console.WriteLine("0. Exit");
     Console.Write("Enter your choice: ");
     string? menuChoice = Console.ReadLine();
@@ -160,10 +168,18 @@ while (!exit)
             break;
 
         case "7":
-            await RunExportAllArtifactsAsync(books, minYear);
+            RunLazyProcessingDemo(books);
             break;
 
         case "8":
+            RunCatalogLookup(books);
+            break;
+
+        case "9":
+            await RunExportAllArtifactsAsync(books, minYear);
+            break;
+
+        case "10":
             await RunFullCapstoneDemonstration(books, minYear);
             break;
 
@@ -213,15 +229,24 @@ static void RunWorkflow1(
     Func<Book, double> scoringPolicy,
     string policyName)
 {
-    var result = BookPipeline.FindResourcesResult(books, minimumYear, scoringPolicy);
-    if (result is Result<IReadOnlyList<Recommendation>, DomainError>.Failure failure)
+    var validationResult = ValidatedSearch.Create(books, minimumYear, scoringPolicy);
+    if (validationResult is ValidationResult<ValidatedSearch>.Invalid invalid)
     {
-        Console.WriteLine($"Workflow 1 failed: {failure.Error}");
+        Console.WriteLine($"Workflow 1 validation failed: {string.Join("; ", invalid.Reasons)}");
         return;
     }
 
-    var recommendations = ((Result<IReadOnlyList<Recommendation>, DomainError>.Success)result).Value;
-    PrintBooks.Print(policyName, recommendations);
+    var validSearch = ((ValidationResult<ValidatedSearch>.Valid)validationResult).Value;
+    var state = new BookWorkflowState.Pending(validSearch);
+    var transitionResult = BookWorkflow.TransitionResult(state);
+    if (transitionResult is Result<BookWorkflowState, DomainError>.Failure failure)
+    {
+        Console.WriteLine($"Workflow 1 state transition failed: {failure.Error}");
+        return;
+    }
+
+    var completed = (BookWorkflowState.Completed)((Result<BookWorkflowState, DomainError>.Success)transitionResult).Value;
+    PrintBooks.Print(policyName, completed.Recommendations);
 }
 
 static void RunWorkflow2StudyPlan(IEnumerable<Book> books)
@@ -306,6 +331,19 @@ static void RunWorkflow3LoanReservation(IEnumerable<Book> books)
         weeks = 2;
     }
 
+    Console.WriteLine("\nChoose fee policy:");
+    Console.WriteLine("1. Standard Policy ($1.50/day overdue)");
+    Console.WriteLine("2. Academic Discount Policy ($0.50/day overdue)");
+    Console.Write("Choice (Enter to use tier default): ");
+    string? feeChoice = Console.ReadLine();
+
+    Func<int, double> feePolicy = feeChoice switch
+    {
+        "1" => LoanWorkflow.StandardFeePolicy,
+        "2" => LoanWorkflow.AcademicDiscountFeePolicy,
+        _ => tier == BorrowerTier.Standard ? LoanWorkflow.StandardFeePolicy : LoanWorkflow.AcademicDiscountFeePolicy
+    };
+
     var draftResult = LoanWorkflow.CreateDraft(studentId, tier, keys, weeks);
     if (draftResult is Result<LoanState.Draft, DomainError>.Failure draftFail)
     {
@@ -315,7 +353,7 @@ static void RunWorkflow3LoanReservation(IEnumerable<Book> books)
     var draft = ((Result<LoanState.Draft, DomainError>.Success)draftResult).Value;
     Console.WriteLine("[Step 1] Draft Loan Created Successfully.");
 
-    var validateResult = LoanWorkflow.ValidateDraft(draft, catalogList, LoanWorkflow.StandardFeePolicy);
+    var validateResult = LoanWorkflow.ValidateDraft(draft, catalogList, feePolicy);
     if (validateResult is Result<LoanState.Validated, DomainError>.Failure valFail)
     {
         Console.WriteLine($"[VALIDATION REJECTED]: {valFail.Error}");
@@ -358,6 +396,59 @@ static void RunConfiguredCurriedComparison(IEnumerable<Book> books, int minYear)
     PrintBooks.Print("Configuration 2: Recency-Biased (EditionWeight: 0.1, RecencyWeight: 2.5)", recRecommendations);
 }
 
+static void RunLazyProcessingDemo(IEnumerable<Book> books)
+{
+    Console.WriteLine("=== Demonstration of Lazy Processing & Deferred Execution (yield return) ===");
+    Console.WriteLine("1. Stream scoring with yield return (DeferredExecution.StreamScoreBooks):");
+    int count = 0;
+    foreach (var item in DeferredExecution.StreamScoreBooks(books, CurriedScoring.PopularityBiasedScorer))
+    {
+        count++;
+        Console.WriteLine($"   [Lazy Item {count}] Title: '{item.Book.Title}' -> Score: {item.Score:F1}");
+        if (count >= 3)
+        {
+            Console.WriteLine("   ... (early break to demonstrate deferred processing without iterating entire sequence)");
+            break;
+        }
+    }
+
+    string sampleReport = Path.Combine(AppContext.BaseDirectory, "reports", "author_statistics_report.txt");
+    if (File.Exists(sampleReport))
+    {
+        Console.WriteLine("\n2. File streaming with yield return (ReportExporter.StreamLines):");
+        int lineNum = 0;
+        foreach (var line in ReportExporter.StreamLines(sampleReport).Take(4))
+        {
+            lineNum++;
+            Console.WriteLine($"   [StreamLine {lineNum}] {line}");
+        }
+    }
+}
+
+static void RunCatalogLookup(IEnumerable<Book> books)
+{
+    Console.WriteLine("=== Catalog Lookup by Key (FindByKey & Option<Book>) ===");
+    Console.Write("Enter book key to search (e.g. '/boundary'): ");
+    string? key = Console.ReadLine();
+
+    var option = BookPipeline.FindBookOption(books, key);
+    var matchString = option.Match(
+        some => $"[Option.Some] Found: '{some.Title}' (Publish year: {some.FirstPublishYear}, Editions: {some.EditionCount})",
+        () => "[Option.None] Book was not found in catalog."
+    );
+    Console.WriteLine(matchString);
+
+    var result = BookPipeline.FindByKey(books, key);
+    if (result is Result<Book, DomainError>.Success ok)
+    {
+        Console.WriteLine($"[Result.Success] '{ok.Value.Title}' found via FindByKey.");
+    }
+    else if (result is Result<Book, DomainError>.Failure fail)
+    {
+        Console.WriteLine($"[Result.Failure] Code: {fail.Error.Code}, Message: {fail.Error.Message}");
+    }
+}
+
 static async Task RunExportAllArtifactsAsync(IEnumerable<Book> books, int minYear)
 {
     string outDir = Path.Combine(AppContext.BaseDirectory, "reports");
@@ -388,7 +479,7 @@ static async Task RunExportAllArtifactsAsync(IEnumerable<Book> books, int minYea
     var draftResult = LoanWorkflow.CreateDraft("ST-2026-EXPORT", BorrowerTier.Honors, catalogList.Take(2).Select(b => b.Key), 4);
     if (draftResult is Result<LoanState.Draft, DomainError>.Success sDraft)
     {
-        var valResult = LoanWorkflow.ValidateDraft(sDraft.Value, catalogList);
+        var valResult = LoanWorkflow.ValidateDraft(sDraft.Value, catalogList, LoanWorkflow.AcademicDiscountFeePolicy);
         if (valResult is Result<LoanState.Validated, DomainError>.Success sVal)
         {
             var appResult = LoanWorkflow.ApproveLoan(sVal.Value);
@@ -407,7 +498,7 @@ static async Task RunFullCapstoneDemonstration(IEnumerable<Book> books, int minY
     Console.WriteLine(">>> RUNNING FULL FINAL PROJECT DEMONSTRATION <<<");
     Console.WriteLine("========================================================\n");
 
-    Console.WriteLine("--> WORKFLOW 1: Resource Discovery & Ranking");
+    Console.WriteLine("--> WORKFLOW 1: Resource Discovery & Ranking (with ValidatedSearch & BookWorkflow)");
     RunWorkflow1(books, minYear, CurriedScoring.PopularityBiasedScorer, "Curried Popularity");
 
     Console.WriteLine("\n--> WORKFLOW 2: Personalized Study Plan Generation");
@@ -415,12 +506,12 @@ static async Task RunFullCapstoneDemonstration(IEnumerable<Book> books, int minY
     if (planRes is Result<StudyPlan, DomainError>.Success sPlan)
         Console.WriteLine(ReportExporter.FormatStudyPlan(sPlan.Value));
 
-    Console.WriteLine("\n--> WORKFLOW 3: Safe Multi-Stage Book Loan");
+    Console.WriteLine("\n--> WORKFLOW 3: Safe Multi-Stage Book Loan (with AcademicDiscountFeePolicy)");
     var catalog = books.ToList();
     var draftRes = LoanWorkflow.CreateDraft("ST-DEFENSE-01", BorrowerTier.Honors, catalog.Take(2).Select(b => b.Key), 3);
     if (draftRes is Result<LoanState.Draft, DomainError>.Success sDraft)
     {
-        var valRes = LoanWorkflow.ValidateDraft(sDraft.Value, catalog);
+        var valRes = LoanWorkflow.ValidateDraft(sDraft.Value, catalog, LoanWorkflow.AcademicDiscountFeePolicy);
         if (valRes is Result<LoanState.Validated, DomainError>.Success sVal)
         {
             var appRes = LoanWorkflow.ApproveLoan(sVal.Value);
@@ -428,6 +519,16 @@ static async Task RunFullCapstoneDemonstration(IEnumerable<Book> books, int minY
                 Console.WriteLine(ReportExporter.FormatLoanAgreement(sApp.Value));
         }
     }
+
+    Console.WriteLine("\n--> LAZY PROCESSING & DEFERRED EXECUTION (yield return):");
+    RunLazyProcessingDemo(books);
+
+    Console.WriteLine("\n--> CATALOG LOOKUP (FindByKey & Option<Book>):");
+    var lookupKey = catalog.FirstOrDefault()?.Key ?? "/boundary";
+    var opt = BookPipeline.FindBookOption(books, lookupKey);
+    Console.WriteLine(opt.Match(
+        b => $"[Option.Some] Found '{b.Title}'",
+        () => "[Option.None] Book not found"));
 
     Console.WriteLine("\n--> LINQ REPORT 1: Author Publishing & Edition Reach");
     RunAuthorReport(books, minYear);

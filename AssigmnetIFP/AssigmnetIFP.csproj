@@ -7,6 +7,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Assignment1FP.Tests" />
+  </ItemGroup>
+
   <Target Name="BuildNativeLinux" BeforeTargets="BeforeBuild" Condition="$([MSBuild]::IsOSPlatform('Linux')) And !Exists('..\native\linux\libcalc.so')">
     <Exec Command="make -C ../native/linux" ContinueOnError="true" />
   </Target>

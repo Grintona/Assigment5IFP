@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using StudyResourceFinder.Models;
+using StudyResourceFinder.Native;
 using StudyResourceFinder.Services;
 using Xunit;
 
@@ -410,6 +411,16 @@ public class FinalProjectTests
         var nullBook = ValidatedSearch.CreateResult(new Book[] { null! }, 2000, Policies.Popularity);
         Assert.False(nullBook.IsSuccess);
         Assert.Equal("MissingBook", ((Result<ValidatedSearch, DomainError>.Failure)nullBook).Error.Code);
+    }
+
+    [Fact]
+    public void NativeAdapter_CalculateManagedPriority_MatchesFormula()
+    {
+        ulong score = NativeAdapter.CalculateManagedPriority(12, 55, 15);
+        Assert.Equal(132UL, score);
+
+        ulong underflow = NativeAdapter.CalculateManagedPriority(1, 0, 50);
+        Assert.Equal(0UL, underflow);
     }
 
     #endregion

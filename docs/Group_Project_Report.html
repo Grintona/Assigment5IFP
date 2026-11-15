@@ -238,7 +238,7 @@ The application enforces strict architectural boundaries to preserve functional 
         <tr><td>Custom Extension Methods (<code>GetAge</code>, <code>WithMinimumEditions</code>)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
         <tr><td>Deferred Execution & Safe Stream Disposal</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
         <tr><td>Native Assembly Integration (x86-64 NASM)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
-        <tr><td>Automated Test Suite (69 xUnit Tests)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
+        <tr><td>Automated Test Suite (70 xUnit Tests)</td><td>Mikhail Gulyayev</td><td><span class="badge">COMPLETED</span></td></tr>
     </tbody>
 </table>
 
@@ -318,7 +318,7 @@ The project utilizes the following established tools, frameworks, and academic l
 
 <h2>10. Actual Automated Test Execution Results & Defects Discovered (Фактический результат тестов)</h2>
 <p>
-The test suite consists of <strong>69 automated xUnit tests</strong> executed via <code>dotnet test Assignment5.slnx</code>. All tests pass deterministically:
+The test suite consists of <strong>70 automated xUnit tests</strong> executed via <code>dotnet test Assignment5.slnx</code>. All tests pass deterministically:
 </p>
 <pre>
 Тестовый запуск для Assignment1FP.Tests.dll (.NETCoreApp,Version=v10.0)
@@ -327,7 +327,7 @@ The test suite consists of <strong>69 automated xUnit tests</strong> executed vi
 Запуск выполнения тестов; подождите...
 Общее количество тестовых файлов (1), соответствующих указанному шаблону.
 
-Пройден!   : не пройдено     0, пройдено    69, пропущено     0, всего    69, длительность 101 ms.
+Пройден!   : не пройдено     0, пройдено    70, пропущено     0, всего    70, длительность 109 ms.
 </pre>
 
 <h3>Defects Discovered and Resolved During Testing</h3>
@@ -359,7 +359,7 @@ Writing automated tests prior to final integration exposed four notable defects 
 # 1. Build the native shared library:
 make -C native/linux
 
-# 2. Run all 69 automated tests:
+# 2. Run all 70 automated tests:
 dotnet test Assignment5.slnx
 
 # 3. Launch interactive console application:

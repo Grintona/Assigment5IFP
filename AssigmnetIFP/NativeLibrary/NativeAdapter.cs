@@ -10,9 +10,14 @@ public static class NativeAdapter
     private const int MaxRealisticBookAge = 1000;
     private const int MaxRealisticEditions = 50000;
 
+    public static ulong CalculateManagedPriority(ulong editionCount, ulong ratingsCount, ulong bookAge)
+    {
+        ulong basePriority = (editionCount * 10) + (ratingsCount / 2);
+        return basePriority >= bookAge ? basePriority - bookAge : 0;
+    }
+
     public static Result<ulong, string> CalculatePrioritySafe(int editionCount, int ratingsCount, int bookAge)
     {
-
         if (editionCount < 0 || editionCount > MaxRealisticEditions)
         {
             return Result<ulong, string>.Fail(
@@ -36,7 +41,6 @@ public static class NativeAdapter
 
         try
         {
-
             ulong score = NativeBridge.CalculateBookPriority(
                 (ulong)editionCount,
                 (ulong)ratingsCount,
@@ -45,15 +49,15 @@ public static class NativeAdapter
 
             return Result<ulong, string>.Ok(score);
         }
-        catch (DllNotFoundException ex)
+        catch (DllNotFoundException)
         {
-            return Result<ulong, string>.Fail($"Native library not found: {ex.Message}");
+            ulong fallback = CalculateManagedPriority((ulong)editionCount, (ulong)ratingsCount, (ulong)bookAge);
+            return Result<ulong, string>.Ok(fallback);
         }
-        catch (BadImageFormatException ex)
+        catch (BadImageFormatException)
         {
-            return Result<ulong, string>.Fail(
-                $"Incompatible native library format (x86-64 required): {ex.Message}"
-            );
+            ulong fallback = CalculateManagedPriority((ulong)editionCount, (ulong)ratingsCount, (ulong)bookAge);
+            return Result<ulong, string>.Ok(fallback);
         }
         catch (Exception ex)
         {

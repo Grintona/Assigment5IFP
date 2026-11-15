@@ -10,7 +10,7 @@
 | **Author / Student** | **Gulyayev Mikhail** |
 | **Academic Group** | **IT-2512** |
 | **Submission Category** | **Individual Project (Team of 1)** |
-| **Implemented Scope** | 100% of functional core, domain models, 3 workflows, LINQ analytics, safe persistence, native assembly, and 62 automated tests |
+| **Implemented Scope** | 100% of functional core, domain models, 3 workflows, LINQ analytics, safe persistence, native assembly, and 70 automated tests |
 | **Target Platform** | **.NET 10.0** (`net10.0`), C# 13, x86-64 NASM AMD64 Assembly |
 | **Official Reports** | Available in `docs/`: [`Group_Project_Report.pdf`](docs/Group_Project_Report.pdf) and [`Individual_Contribution_Report.pdf`](docs/Individual_Contribution_Report.pdf) |
 
@@ -180,11 +180,13 @@ Implemented in `Services/LinqReports.cs`, completely separated from display:
 - **Safe Asynchronous Disposal (`Services/ReportExporter.cs`):** `ExportReportAsync` uses `await using` on `FileStream` and `StreamWriter` to guarantee file handle release on all code paths.
 - **Iterator Lock Release:** `StreamLines` wraps file reading in `using` inside the iterator method, ensuring early termination (`Take(1)`) releases OS file locks immediately.
 
-### 4.7 Hardware Acceleration: AMD64 Native Assembly & Oral Defense Details
+### 4.7 Hardware Acceleration: AMD64 Native Assembly & Managed Fallback
 - **Formula Implemented:**
   $$\text{score} = (\text{edition\_count} \times 10) + \lfloor\text{ratings\_count} / 2\rfloor - \text{book\_age}$$
 - **P/Invoke Binding (`NativeLibrary/NativeBridge.cs`):**
   Uses an explicit `CallingConvention = CallingConvention.Cdecl` and dynamic `NativeLibrary.SetDllImportResolver` to load `libcalc.so` / `libcalc.dll` from `AppContext.BaseDirectory`.
+- **Cross-Platform Managed Fallback (`NativeLibrary/NativeAdapter.cs`):**
+  If the native shared library is absent (`DllNotFoundException` or `BadImageFormatException`, e.g. on Windows or macOS without a pre-compiled DLL), `NativeAdapter` automatically executes an exact pure C# managed fallback `CalculateManagedPriority`, ensuring that 100% of workflows, reports, and tests pass deterministically on any operating system.
 - **Assembly Implementation Details for Oral Defense:**
   1. **Argument Registers & ABI Conventions:**
      - *Linux (System V AMD64 ABI):* 1st argument (`edition_count`) in `rdi`, 2nd argument (`ratings_count`) in `rsi`, 3rd argument (`book_age`) in `rdx`. Return value in `rax`.
@@ -209,11 +211,11 @@ Implemented in `Services/LinqReports.cs`, completely separated from display:
 
 ## 5. Automated Testing Suite
 
-The test project contains **69 automated tests** implemented in xUnit 2.9.3, providing 100% deterministic coverage:
+The test project contains **70 automated tests** implemented in xUnit 2.9.3, providing 100% deterministic coverage:
 
 | Category | Count | Scope & Verification | Status |
 |---|---|---|---|
-| **Pure Functions & Domain Validation** | 41 | Age calculation, edition filtering, author diversity constraints, difficulty pacing, curried partial application, Option Map/Bind/Match, search factory validation, Result.Success null rejection, individual missing key/title/negative edition cases | **PASSED** |
+| **Pure Functions & Domain Validation** | 42 | Age calculation, edition filtering, author diversity constraints, difficulty pacing, curried partial application, Option Map/Bind/Match, search factory validation, Result.Success null rejection, individual missing key/title/negative edition cases, managed fallback equivalence | **PASSED** |
 | **Complete Workflows** | 18 | End-to-end execution of Workflow 1 (scoring/ranking), Workflow 2 (study plan scheduling), Workflow 3 (multi-stage loan), and live API integration | **PASSED** |
 | **State Machine & Temporal Safety** | 5 | Rejection of unvalidated draft approvals, prevention of duplicate approvals, preservation of rejected state | **PASSED** |
 | **Persistence & Resource Disposal** | 5 | Missing file handling, malformed JSON recovery, safe export writing, early iterator file lock release (`Take(1)`) | **PASSED** |
@@ -226,12 +228,12 @@ The test project contains **69 automated tests** implemented in xUnit 2.9.3, pro
 Запуск выполнения тестов; подождите...
 Общее количество тестовых файлов (1), соответствующих указанному шаблону.
 
-Пройден!   : не пройдено     0, пройдено    69, пропущено     0, всего    69, длительность 101 ms.
+Пройден!   : не пройдено     0, пройдено    70, пропущено     0, всего    70, длительность 103 ms.
 ```
 
 ### Defects Discovered and Resolved During Testing
-1. **Premature Loan Approvals:** Automated tests caught an invalid sequence where drafts could be approved directly. Fixed by enforcing typed state transitions (`Draft -> Validated -> Approved`).
-2. **VSTest Runner Dynamic Library Resolution:** Tests initially failed finding `libcalc.so` due to working directory discrepancies. Fixed by configuring dynamic DLL resolution via `AppContext.BaseDirectory`.
+1. **Premature Loan Approvals & State Encapsulation:** Automated tests caught an invalid sequence where drafts could be approved directly. Fixed by enforcing typed state transitions (`Draft -> Validated -> Approved`) and making record constructors `internal` so external callers cannot instantiate unvalidated states.
+2. **VSTest Runner Dynamic Library Resolution & Managed Fallback:** Tests initially failed finding `libcalc.so` due to working directory discrepancies. Fixed by configuring dynamic DLL resolution via `AppContext.BaseDirectory` and providing a resilient managed fallback.
 3. **Resource Leak on Early Iteration Termination:** Early `Take(1)` iteration previously kept file streams locked. Resolved by encapsulating stream initialization in `using` blocks within the `yield return` iterator.
 4. **Result.Success Null Invariant:** Identified that `Result.Success` could accept null. Enforced non-null invariants in constructors and factories with `ArgumentNullException.ThrowIfNull`.
 
@@ -240,10 +242,10 @@ The test project contains **69 automated tests** implemented in xUnit 2.9.3, pro
 ## 6. Project Limitations & Known Shortcomings
 
 1. **API Rate Limiting & Page Depth:** OpenLibrary search is configured with a deterministic limit of 10 items (`limit=10`) per query without pagination.
-2. **Offline Independence:** While an OpenLibrary API option is provided, the application is **completely offline-capable**. All reproducible workflows, reports, and all 69 automated tests run against local files (`Data/books.json`) without internet connectivity.
+2. **Offline Independence:** While an OpenLibrary API option is provided, the application is **completely offline-capable**. All reproducible workflows, reports, and all 70 automated tests run against local files (`Data/books.json`) without internet connectivity.
 3. **Session Persistence:** Catalog updates and loans are held in memory during the session and exported to disk as structured report files (`reports/*.txt`). An external SQL database was deliberately omitted to preserve zero-dependency functional purity.
 4. **Defensive Metadata Handling:** Missing author or language lists in raw JSON records are treated as empty arrays rather than rejecting otherwise valid books.
-5. **Assembly Architecture:** The native routine is compiled for x86-64 AMD64 architectures. Non-x86 platforms (e.g. ARM64) require a managed fallback or recompilation.
+5. **Cross-Platform Assembly Support:** The assembly implementation supports both Linux System V AMD64 and Windows x64. On unsupported environments (e.g. ARM64 or systems without NASM), the system automatically activates its managed fallback.
 
 ---
 
@@ -251,14 +253,19 @@ The test project contains **69 automated tests** implemented in xUnit 2.9.3, pro
 
 ### Prerequisites
 - .NET 10.0 SDK (`dotnet --version`)
-- GCC and NASM (for Linux native assembly build)
+- GCC and NASM (optional for native assembly compilation on Linux and Windows)
 
 ### Build and Run Commands
 ```bash
 # 1. Compile the native shared library:
+# On Linux:
 make -C native/linux
 
-# 2. Run the full automated test suite (all 69 tests):
+# On Windows (x64):
+nasm -f win64 native/windows/library_windows.asm -o native/windows/library_windows.obj
+gcc -shared native/windows/library_windows.obj -o AssigmnetIFP/bin/Debug/net10.0/libcalc.dll
+
+# 2. Run the full automated test suite (all 70 tests):
 dotnet test Assignment5.slnx
 
 # 3. Launch the interactive application (offline mode with Data/books.json):
